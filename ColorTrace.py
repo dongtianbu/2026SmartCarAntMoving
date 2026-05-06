@@ -55,6 +55,11 @@ class ColorTraceController:
         kp_y=3.0,
         kd_y=0.2,
         dead_zone=10,
+        input_filter_alpha=0.35,
+        near_center_min_duty=2200,
+        near_center_max_duty=4200,
+        slow_zone=20,
+        duty_ramp_step=220,
     ):
         self.mcx = mcx_usart
         self.SCREEN_W = getattr(mcx_usart, "VIEW_WIDTH", self.SCREEN_W)
@@ -67,7 +72,12 @@ class ColorTraceController:
         self.buf = bytearray()
         self.max_tracking_duty = min(MotorControl.MAX_DUTY, int(max_tracking_duty))
         self.min_tracking_duty = min(self.max_tracking_duty, max(0, int(min_tracking_duty)))
+        self.near_center_min_duty = min(self.min_tracking_duty, max(0, int(near_center_min_duty)))
+        self.near_center_max_duty = min(self.max_tracking_duty, max(self.near_center_min_duty, int(near_center_max_duty)))
         self.target_hold_ms = max(0, int(target_hold_ms))
+        self.input_filter_alpha = min(1.0, max(0.05, float(input_filter_alpha)))
+        self.slow_zone = max(self.dead_zone + 2, int(slow_zone))
+        self.duty_ramp_step = max(1, int(duty_ramp_step))
         self.max_tracking_speed = max(
             20, int(self.max_tracking_duty * MotorControl.MAX_SPEED / MotorControl.MAX_DUTY)
         )
@@ -96,6 +106,9 @@ class ColorTraceController:
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
+        self.target_duty = (0, 0, 0)
+        self.filtered_cx = None
+        self.filtered_cy = None
 
     def start(self):
         self.x_pid.reset()
@@ -110,6 +123,9 @@ class ColorTraceController:
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
+        self.target_duty = (0, 0, 0)
+        self.filtered_cx = None
+        self.filtered_cy = None
 
     def stop(self):
         self.running = False
@@ -121,6 +137,9 @@ class ColorTraceController:
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
+        self.target_duty = (0, 0, 0)
+        self.filtered_cx = None
+        self.filtered_cy = None
 
     def _apply_duty(self, motor_1, motor_2, motor_3, duty):
         d1, d2, d3 = duty
@@ -132,21 +151,64 @@ class ColorTraceController:
     def _stop_motors(self, motor_1, motor_2, motor_3):
         self._apply_duty(motor_1, motor_2, motor_3, (0, 0, 0))
         self.last_raw_duty = (0, 0, 0)
+        self.target_duty = (0, 0, 0)
 
-    def _bias_duty(self, duty_value):
+    def _bias_duty(self, duty_value, active_min_duty, active_max_duty):
         if duty_value == 0:
             return 0
 
         duty_sign = 1 if duty_value > 0 else -1
-        duty_mag = min(self.max_tracking_duty, abs(int(duty_value)))
+        duty_mag = min(active_max_duty, abs(int(duty_value)))
 
-        if self.min_tracking_duty <= 0 or self.min_tracking_duty >= self.max_tracking_duty:
-            return duty_sign * max(self.min_tracking_duty, duty_mag)
+        if active_min_duty <= 0 or active_min_duty >= active_max_duty:
+            return duty_sign * max(active_min_duty, duty_mag)
 
-        biased_mag = self.min_tracking_duty + int(
-            duty_mag * (self.max_tracking_duty - self.min_tracking_duty) / self.max_tracking_duty
+        biased_mag = active_min_duty + int(
+            duty_mag * (active_max_duty - active_min_duty) / active_max_duty
         )
-        return duty_sign * min(self.max_tracking_duty, biased_mag)
+        return duty_sign * min(active_max_duty, biased_mag)
+
+    def _filter_center(self, cx, cy):
+        if self.filtered_cx is None or self.filtered_cy is None:
+            self.filtered_cx = cx
+            self.filtered_cy = cy
+        else:
+            alpha = self.input_filter_alpha
+            self.filtered_cx += alpha * (cx - self.filtered_cx)
+            self.filtered_cy += alpha * (cy - self.filtered_cy)
+        return self.filtered_cx, self.filtered_cy
+
+    def _motion_limits(self, err_x, err_y):
+        error_mag = max(abs(err_x), abs(err_y))
+        if error_mag <= self.dead_zone:
+            return 0, self.near_center_max_duty
+
+        span = max(1.0, float(self.slow_zone - self.dead_zone))
+        ratio = min(1.0, max(0.0, (error_mag - self.dead_zone) / span))
+
+        active_min_duty = self.near_center_min_duty + int(
+            (self.min_tracking_duty - self.near_center_min_duty) * ratio
+        )
+        active_max_duty = self.near_center_max_duty + int(
+            (self.max_tracking_duty - self.near_center_max_duty) * ratio
+        )
+        active_max_duty = max(active_min_duty, active_max_duty)
+        return active_min_duty, active_max_duty
+
+    def _step_towards(self, current, target, step):
+        if current < target:
+            return min(current + step, target)
+        if current > target:
+            return max(current - step, target)
+        return current
+
+    def _ramp_duty_towards(self, motor_1, motor_2, motor_3, target_duty):
+        duty = tuple(
+            self._step_towards(current, target, self.duty_ramp_step)
+            for current, target in zip(self.last_duty, target_duty)
+        )
+        self._apply_duty(motor_1, motor_2, motor_3, duty)
+        return duty
 
     def _recv_frames(self):
         frames = []
@@ -169,8 +231,7 @@ class ColorTraceController:
         return frames
 
     def _frame_to_state(self, frame):
-        cx = frame["center_x"]
-        cy = frame["center_y"]
+        cx, cy = self._filter_center(frame["center_x"], frame["center_y"])
         err_x = self.CENTER_X - cx
         err_y = self.CENTER_Y - cy
         box = (frame["x1"], frame["y1"], frame["x2"], frame["y2"])
@@ -191,6 +252,7 @@ class ColorTraceController:
 
         has_target_now = False
         target_locked = False
+        explicit_no_target = False
         cx = self.CENTER_X
         cy = self.CENTER_Y
         err_x = 0
@@ -222,11 +284,14 @@ class ColorTraceController:
                     self.y_pid.reset()
             else:
                 # Explicit no-target frame must clear control immediately.
+                explicit_no_target = True
                 self.last_frame = None
                 self.last_frame_ms = None
                 self.correction_x = 0
                 self.correction_y = 0
                 self.moving = False
+                self.filtered_cx = None
+                self.filtered_cy = None
                 self.x_pid.reset()
                 self.y_pid.reset()
         elif self._target_is_recent(now_ms):
@@ -240,25 +305,36 @@ class ColorTraceController:
             self.correction_x = 0
             self.correction_y = 0
             self.moving = False
+            self.filtered_cx = None
+            self.filtered_cy = None
             self.x_pid.reset()
             self.y_pid.reset()
 
         if self.moving and target_locked and not in_center and has_target_now:
+            active_min_duty, active_max_duty = self._motion_limits(err_x, err_y)
             raw_duty = MotorControl.vector_to_duty(
                 self.correction_x,
                 -self.correction_y,
-                max_duty=self.max_tracking_duty,
+                max_duty=active_max_duty,
                 min_duty_start=0,
             )
-            duty = tuple(self._bias_duty(value) for value in raw_duty)
+            self.target_duty = tuple(
+                self._bias_duty(value, active_min_duty, active_max_duty) for value in raw_duty
+            )
             self.last_raw_duty = raw_duty
-            self._apply_duty(motor_1, motor_2, motor_3, duty)
+            duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
         elif self.moving and target_locked and not in_center:
             raw_duty = self.last_raw_duty
-            self._apply_duty(motor_1, motor_2, motor_3, self.last_duty)
-        else:
+            duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
+        elif explicit_no_target:
             raw_duty = (0, 0, 0)
             self._stop_motors(motor_1, motor_2, motor_3)
+        else:
+            raw_duty = (0, 0, 0)
+            self.target_duty = (0, 0, 0)
+            duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
+            if duty == (0, 0, 0):
+                self.last_raw_duty = (0, 0, 0)
 
         return {
             "has_target": has_target_now,
@@ -279,4 +355,7 @@ class ColorTraceController:
             "box": box,
             "raw_duty": raw_duty,
             "duty": self.last_duty,
+            "target_duty": self.target_duty,
+            "filtered_cx": cx,
+            "filtered_cy": cy,
         }

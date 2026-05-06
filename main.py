@@ -25,11 +25,17 @@ TRACK_KP_X = 0.2
 TRACK_KD_X = 0.75
 TRACK_KP_Y = 0.2
 TRACK_KD_Y = 0.75
-TRACK_DEAD_ZONE = 6
+TRACK_DEAD_ZONE = 4
+TRACK_INPUT_FILTER_ALPHA = 0.35
+TRACK_NEAR_CENTER_MIN_DUTY = 2200
+TRACK_NEAR_CENTER_MAX_DUTY = 4200
+TRACK_SLOW_ZONE = 20
+TRACK_DUTY_RAMP_STEP = 220
 
 DEBUG_PRINT_EVERY = 10
 NO_TARGET_REPORT_EVERY = 50
 MAIN_LOOP_DELAY_MS = 1
+GC_COLLECT_EVERY = 100
 
 
 if __name__ == "__main__":
@@ -57,14 +63,22 @@ if __name__ == "__main__":
                                        kd_x=TRACK_KD_X,
                                        kp_y=TRACK_KP_Y,
                                        kd_y=TRACK_KD_Y,
-                                       dead_zone=TRACK_DEAD_ZONE)
+                                       dead_zone=TRACK_DEAD_ZONE,
+                                       input_filter_alpha=TRACK_INPUT_FILTER_ALPHA,
+                                       near_center_min_duty=TRACK_NEAR_CENTER_MIN_DUTY,
+                                       near_center_max_duty=TRACK_NEAR_CENTER_MAX_DUTY,
+                                       slow_zone=TRACK_SLOW_ZONE,
+                                       duty_ramp_step=TRACK_DUTY_RAMP_STEP)
 
     print("=== Color Trace ===")
     print(f"Screen: {color_trace.SCREEN_W}x{color_trace.SCREEN_H}")
     print(f"Target center: ({color_trace.CENTER_X}, {color_trace.CENTER_Y})")
     print(f"Base duty: {color_trace.base_duty}")
     print(f"Tracking duty: min={color_trace.min_tracking_duty} max={color_trace.max_tracking_duty}")
+    print(f"Near-center duty: min={color_trace.near_center_min_duty} max={color_trace.near_center_max_duty}")
     print(f"Target hold: {color_trace.target_hold_ms} ms")
+    print(f"Input filter alpha: {color_trace.input_filter_alpha}")
+    print(f"Duty ramp step: {color_trace.duty_ramp_step}")
     print(f"PID: kp_x={TRACK_KP_X} kd_x={TRACK_KD_X} kp_y={TRACK_KP_Y} kd_y={TRACK_KD_Y}")
 
     print("Press switch2 (D9) to stop.\n")
@@ -74,8 +88,10 @@ if __name__ == "__main__":
     print("GO! Tracking sandbag...\n")
 
     tick = 0
+    loop_count = 0
 
     while True:
+        loop_count += 1
         result = color_trace.update(MotorControl.motor_1, MotorControl.motor_2, MotorControl.motor_3)
 
         if result is not None:
@@ -109,13 +125,15 @@ if __name__ == "__main__":
                     else:
                         action = "DOWN"
                 msg = (f"{target_str} err=({result['err_x']:>+5.0f},{result['err_y']:>+5.0f}) " +
+                       f"filt=({result['filtered_cx']:>5.1f},{result['filtered_cy']:>5.1f}) " +
                        f"corr=({result['correction_x']:>+6.0f},{result['correction_y']:>+6.0f}) " +
                        f"raw=({result['raw_duty'][0]:>+5.0f},{result['raw_duty'][1]:>+5.0f},{result['raw_duty'][2]:>+5.0f}) " +
+                       f"target=({result['target_duty'][0]:>+5.0f},{result['target_duty'][1]:>+5.0f},{result['target_duty'][2]:>+5.0f}) " +
                        f"duty=({result['duty'][0]:>+5.0f},{result['duty'][1]:>+5.0f},{result['duty'][2]:>+5.0f}) [{action}]")
                 print(msg)
 
         else:
-            if tick % 100 == 0:
+            if loop_count % 100 == 0:
                 print("[DEBUG] update() returned None!")
 
         if switch2.value() != state2:
@@ -127,4 +145,5 @@ if __name__ == "__main__":
             break
 
         time.sleep_ms(MAIN_LOOP_DELAY_MS)
-        gc.collect()
+        if loop_count % GC_COLLECT_EVERY == 0:
+            gc.collect()
