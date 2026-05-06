@@ -4,9 +4,9 @@ extern "C" {
 #include "zf_common_headfile.h"
 #include "color_tracer.h"
 
-#define UART_SEND_FREQ           10u
+#define UART_SEND_FREQ           30u
 #define CAMERA_FPS               30u
-#define SEND_INTERVAL            (CAMERA_FPS / UART_SEND_FREQ)
+#define SEND_INTERVAL            ((CAMERA_FPS + UART_SEND_FREQ - 1u) / UART_SEND_FREQ)
 #define CALIB_MARK_HALF_SIZE     6
 #define CALIB_FEEDBACK_FRAMES    12u
 
@@ -123,7 +123,7 @@ int main(void)
     zf_user_printf("========================================\r\n");
     zf_user_printf("MCXVision Pure Color Sandbag Detector\r\n");
     zf_user_printf("KEY1=Calibrate Center Target\r\n");
-    zf_user_printf("UART Box Scale=%ux%u, Camera=%ux%u\r\n", UART_VIEW_W, UART_VIEW_H, SCC8660_W, SCC8660_H);
+    zf_user_printf("UART Box Scale=%ux%u, Camera=%ux%u, Send=%uHz\r\n", UART_VIEW_W, UART_VIEW_H, SCC8660_W, SCC8660_H, UART_SEND_FREQ);
     zf_user_printf("========================================\r\n");
 
     gpio_init(gpio_key_1, GPI, 0, PULL_UP);
