@@ -45,33 +45,64 @@ MIN_DUTY_START = 1500
 current_v1 = 0
 current_v2 = 0
 current_v3 = 0
+WHEEL_MIXING = (
+    (-0.5, -math.cos(pi / 6)),
+    (1.0, 0.0),
+    (-0.5, math.cos(pi / 6)),
+)
 
 Vx = 0
 Vy = 0
 omiga = 0
 r = 0
 
-def V1V2V3DSpeedToDuty(v1, v2, v3):
-    v1 = max(-MAX_SPEED, min(MAX_SPEED, v1))
-    v2 = max(-MAX_SPEED, min(MAX_SPEED, v2))
-    v3 = max(-MAX_SPEED, min(MAX_SPEED, v3))
+def _clamp(value, lower, upper):
+    return max(lower, min(upper, value))
 
-    duty1 = int(v1 * (MAX_DUTY / MAX_SPEED))
-    duty2 = int(v2 * (MAX_DUTY / MAX_SPEED))
-    duty3 = int(v3 * (MAX_DUTY / MAX_SPEED))
+def chassis_vector_to_wheel_speed(vx, vy, omega=0):
+    return tuple(
+        (mix_x * vx) + (mix_y * vy) + omega
+        for mix_x, mix_y in WHEEL_MIXING
+    )
 
-    for i in range(3):
-        d = [duty1, duty2, duty3][i]
-        if 0 < abs(d) < MIN_DUTY_START:
-            sign = 1 if d > 0 else -1
-            if i == 0:
-                duty1 = sign * MIN_DUTY_START
-            elif i == 1:
-                duty2 = sign * MIN_DUTY_START
-            else:
-                duty3 = sign * MIN_DUTY_START
+def V1V2V3DSpeedToDuty(v1, v2, v3, max_duty=MAX_DUTY, min_duty_start=MIN_DUTY_START):
+    speeds = [float(v1), float(v2), float(v3)]
+    max_abs_speed = max(abs(speed) for speed in speeds)
+    if max_abs_speed > MAX_SPEED and max_abs_speed > 0:
+        scale = MAX_SPEED / max_abs_speed
+        speeds = [speed * scale for speed in speeds]
 
-    return duty1, duty2, duty3
+    duties = [speed * (max_duty / MAX_SPEED) for speed in speeds]
+    non_zero_duties = [abs(duty) for duty in duties if abs(duty) > 1e-6]
+    if not non_zero_duties:
+        return 0, 0, 0
+
+    scale_up = 1.0
+    min_non_zero = min(non_zero_duties)
+    if min_non_zero < min_duty_start:
+        scale_up = min_duty_start / min_non_zero
+
+    max_scaled = max(abs(duty) * scale_up for duty in duties)
+    scale_down = 1.0
+    if max_scaled > max_duty:
+        scale_down = max_duty / max_scaled
+
+    final_scale = scale_up * scale_down
+    duty_values = []
+    for duty in duties:
+        if abs(duty) <= 1e-6:
+            duty_values.append(0)
+        else:
+            duty_values.append(int(round(_clamp(duty * final_scale, -max_duty, max_duty))))
+
+    return tuple(duty_values)
+
+def vector_to_duty(vx, vy, omega=0, max_duty=MAX_DUTY, min_duty_start=MIN_DUTY_START):
+    return V1V2V3DSpeedToDuty(
+        *chassis_vector_to_wheel_speed(vx, vy, omega),
+        max_duty=max_duty,
+        min_duty_start=min_duty_start
+    )
 
 def _set_motors(v1, v2, v3):
     global current_v1, current_v2, current_v3
@@ -112,46 +143,34 @@ def ConvertVToVxVy(VSpeed, theta):
     rad = math.radians(theta)
     Vx = VSpeed * math.cos(rad)
     Vy = VSpeed * math.sin(rad)
+    return Vx, Vy
+
+def drive_vector(vx, vy, omega=0, acceleration=0, max_duty=MAX_DUTY, min_duty_start=MIN_DUTY_START):
+    duty_v1, duty_v2, duty_v3 = vector_to_duty(
+        vx,
+        vy,
+        omega=omega,
+        max_duty=max_duty,
+        min_duty_start=min_duty_start
+    )
+    _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
+    return duty_v1, duty_v2, duty_v3
 
 def forward(speed, acceleration=0, direction=0):
-    global Vx, Vy, omiga, r
-    ConvertVToVxVy(speed, 90)
-    omiga = direction
-    v1 = -Vx * math.sin(pi/6) - Vy * math.cos(pi/6) + omiga * r
-    v2 = Vx + omiga * r
-    v3 = -Vx * math.sin(pi/6) + Vy * math.cos(pi/6) + omiga * r
-    duty_v1, duty_v2, duty_v3 = V1V2V3DSpeedToDuty(v1, v2, v3)
-    _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
+    vx, vy = ConvertVToVxVy(speed, 90)
+    return drive_vector(vx, vy, acceleration=acceleration)
 
 def backward(speed, acceleration=0, direction=0):
-    global Vx, Vy, omiga, r
-    ConvertVToVxVy(speed, 270)
-    omiga = direction
-    v1 = -Vx * math.sin(pi/6) - Vy * math.cos(pi/6) + omiga * r
-    v2 = Vx + omiga * r
-    v3 = -Vx * math.sin(pi/6) + Vy * math.cos(pi/6) + omiga * r
-    duty_v1, duty_v2, duty_v3 = V1V2V3DSpeedToDuty(v1, v2, v3)
-    _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
+    vx, vy = ConvertVToVxVy(speed, 270)
+    return drive_vector(vx, vy, acceleration=acceleration)
 
 def move_left(speed, acceleration=0, direction=0):
-    global Vx, Vy, omiga, r
-    ConvertVToVxVy(speed, 180)
-    omiga = direction
-    v1 = -Vx * math.sin(pi/6) - Vy * math.cos(pi/6) + omiga * r
-    v2 = Vx + omiga * r
-    v3 = -Vx * math.sin(pi/6) + Vy * math.cos(pi/6) + omiga * r
-    duty_v1, duty_v2, duty_v3 = V1V2V3DSpeedToDuty(v1, v2, v3)
-    _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
+    vx, vy = ConvertVToVxVy(speed, 180)
+    return drive_vector(vx, vy, acceleration=acceleration)
 
 def move_right(speed, acceleration=0, direction=0):
-    global Vx, Vy, omiga, r
-    ConvertVToVxVy(speed, 0)
-    omiga = direction
-    v1 = -Vx * math.sin(pi/6) - Vy * math.cos(pi/6) + omiga * r
-    v2 = Vx + omiga * r
-    v3 = -Vx * math.sin(pi/6) + Vy * math.cos(pi/6) + omiga * r
-    duty_v1, duty_v2, duty_v3 = V1V2V3DSpeedToDuty(v1, v2, v3)
-    _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
+    vx, vy = ConvertVToVxVy(speed, 0)
+    return drive_vector(vx, vy, acceleration=acceleration)
 
 def stop(acceleration=0):
     if acceleration <= 0:
@@ -163,8 +182,7 @@ def _speed_to_duty(speed):
     return int(max(-MAX_SPEED, min(MAX_SPEED, speed)) * (MAX_DUTY / MAX_SPEED))
 
 def rotate(speed, acceleration=0):
-    duty = _speed_to_duty(speed)
-    _ramp_to(duty, duty, duty, acceleration)
+    return drive_vector(0, 0, omega=_clamp(speed, -MAX_SPEED, MAX_SPEED), acceleration=acceleration)
 
 def rotate_ccw(speed, acceleration=0):
     rotate(speed, acceleration)
@@ -173,17 +191,9 @@ def rotate_cw(speed, acceleration=0):
     rotate(-speed, acceleration)
 
 def move_angle(angle, speed, acceleration=0, direction=0):
-    ConvertVToVxVy(speed, angle)
-    v1 = -Vx * math.sin(pi/6) - Vy * math.cos(pi/6) + omiga * r
-    v2 = Vx + omiga * r
-    v3 = -Vx * math.sin(pi/6) + Vy * math.cos(pi/6) + omiga * r
-    if direction != 0:
-        rot = _speed_to_duty(direction * speed / 100)
-        v1 += rot / (MAX_DUTY / MAX_SPEED)
-        v2 += rot / (MAX_DUTY / MAX_SPEED)
-        v3 += rot / (MAX_DUTY / MAX_SPEED)
-    duty_v1, duty_v2, duty_v3 = V1V2V3DSpeedToDuty(v1, v2, v3)
-    _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
+    vx, vy = ConvertVToVxVy(speed, angle)
+    omega = _clamp(direction, -MAX_SPEED, MAX_SPEED)
+    return drive_vector(vx, vy, omega=omega, acceleration=acceleration)
 
 def move_forward_left(speed, acceleration=0, direction=0):
     move_angle(135, speed, acceleration, direction)
