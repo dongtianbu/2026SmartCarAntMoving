@@ -104,10 +104,22 @@ class MCXVisionUsart:
             y2 = struct.unpack("<H", raw[8:10])[0]
 
             has_target = (idx != NO_TARGET_IDX)
-            width = (x2 - x1 + 1) if x2 >= x1 else 0
-            height = (y2 - y1 + 1) if y2 >= y1 else 0
-            center_x = (x1 + x2) / 2.0
-            center_y = (y1 + y2) / 2.0
+            if has_target:
+                if not (0 <= x1 <= x2 < VIEW_WIDTH and 0 <= y1 <= y2 < VIEW_HEIGHT):
+                    return None
+                width = (x2 - x1 + 1)
+                height = (y2 - y1 + 1)
+                center_x = (x1 + x2) / 2.0
+                center_y = (y1 + y2) / 2.0
+            else:
+                x1 = 0
+                y1 = 0
+                x2 = 0
+                y2 = 0
+                width = 0
+                height = 0
+                center_x = VIEW_WIDTH / 2.0
+                center_y = VIEW_HEIGHT / 2.0
 
             return {
                 "idx": idx,

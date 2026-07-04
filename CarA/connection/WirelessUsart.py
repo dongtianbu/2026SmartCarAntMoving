@@ -1,6 +1,8 @@
 
 from seekfree import WIRELESS_UART
 
+TRACK_ERROR_PREFIX = "VISION_ERR"
+
 
 class WirelessUsart:
 
@@ -24,6 +26,12 @@ class WirelessUsart:
 
     def send_line(self, data=""):
         return self.send_str(str(data) + "\n")
+
+    def send_tracking_error(self, err_x, err_y, prefix=TRACK_ERROR_PREFIX):
+        return self.send_line("{}:{:+.1f},{:+.1f}".format(prefix, err_x, err_y))
+
+    def send_tracking_no_target(self, prefix=TRACK_ERROR_PREFIX):
+        return self.send_line("{}:NO_TARGET".format(prefix))
 
     def send_oscilloscope(self, *channels):
         return self._wuart.send_oscilloscope(*channels)

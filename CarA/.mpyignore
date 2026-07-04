@@ -1,0 +1,5 @@
+.mpy-cli/
+__pycache__/
+*.pyc
+backup/
+test/

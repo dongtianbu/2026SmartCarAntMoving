@@ -1,6 +1,6 @@
 from machine import Pin
 from seekfree import WIRELESS_UART
-from Imu import ImuSensor
+from imu.Imu import ImuSensor
 import time
 import gc
 

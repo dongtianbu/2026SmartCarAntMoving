@@ -1,0 +1,126 @@
+2026-07-04 01:35:22 | INFO | mpy_cli | 开始擦除 [1/9]: 设备文件系统
+2026-07-04 01:35:23 | INFO | mpy_cli | 完成擦除 [1/9]: 设备文件系统
+2026-07-04 01:35:23 | INFO | mpy_cli | 开始上传 [2/9]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 01:35:23 | INFO | mpy_cli | 完成上传 [2/9]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 01:35:23 | INFO | mpy_cli | 开始上传 [3/9]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 01:35:24 | INFO | mpy_cli | 完成上传 [3/9]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 01:35:24 | INFO | mpy_cli | 开始上传 [4/9]: D:/2026_SmartCar/PersonalCode/CarB/boot.py -> :boot.py
+2026-07-04 01:35:24 | INFO | mpy_cli | 完成上传 [4/9]: D:/2026_SmartCar/PersonalCode/CarB/boot.py -> :boot.py
+2026-07-04 01:35:24 | INFO | mpy_cli | 开始上传 [5/9]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 01:35:25 | INFO | mpy_cli | 完成上传 [5/9]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 01:35:25 | INFO | mpy_cli | 开始上传 [6/9]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 01:35:26 | INFO | mpy_cli | 完成上传 [6/9]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 01:35:26 | INFO | mpy_cli | 开始上传 [7/9]: D:/2026_SmartCar/PersonalCode/CarB/user/__init__.py -> :user/__init__.py
+2026-07-04 01:35:27 | INFO | mpy_cli | 完成上传 [7/9]: D:/2026_SmartCar/PersonalCode/CarB/user/__init__.py -> :user/__init__.py
+2026-07-04 01:35:27 | INFO | mpy_cli | 开始上传 [8/9]: D:/2026_SmartCar/PersonalCode/CarB/user/mainB.py -> :user/mainB.py
+2026-07-04 01:35:27 | INFO | mpy_cli | 完成上传 [8/9]: D:/2026_SmartCar/PersonalCode/CarB/user/mainB.py -> :user/mainB.py
+2026-07-04 01:35:27 | INFO | mpy_cli | 开始上传 [9/9]: D:/2026_SmartCar/PersonalCode/CarB/user_main.py -> :user_main.py
+2026-07-04 01:35:28 | INFO | mpy_cli | 完成上传 [9/9]: D:/2026_SmartCar/PersonalCode/CarB/user_main.py -> :user_main.py
+2026-07-04 01:35:28 | INFO | mpy_cli | 部署完成: success=9 failure=0
+2026-07-04 02:06:07 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:06:08 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:06:08 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:06:08 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:06:08 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:06:09 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:06:09 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:06:10 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:06:10 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:06:10 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:06:10 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:06:11 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:06:11 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:07:30 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:07:30 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:07:30 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:07:30 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:07:30 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:07:31 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:07:31 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:07:32 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:07:32 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:07:33 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:07:33 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:07:33 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:07:33 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:16:08 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:16:08 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:16:08 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:16:09 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:16:09 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:16:09 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:16:09 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:16:10 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:16:10 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:16:11 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:16:11 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:16:11 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:16:11 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:22:41 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:22:41 | ERROR | mpy_cli | 擦除失败 [1/6]: 设备文件系统 | mpremote: failed to access com8 (it may be in use by another program)
+2026-07-04 02:22:41 | INFO | mpy_cli | 部署完成: success=0 failure=1
+2026-07-04 02:22:47 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:22:47 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:22:47 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:22:48 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:22:48 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:22:48 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:22:48 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:22:49 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:22:49 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:22:50 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:22:50 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:22:50 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:22:50 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:35:19 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:35:20 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:35:20 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:35:20 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:35:20 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:35:21 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:35:21 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:35:22 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:35:22 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:35:22 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:35:22 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:35:23 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:35:23 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:38:29 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:38:29 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:38:29 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:38:29 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:38:29 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:38:30 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:38:30 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:38:31 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:38:31 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:38:32 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:38:32 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:38:32 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:38:32 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:47:37 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:47:38 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:47:38 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:47:38 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:47:38 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:47:38 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:47:38 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:47:39 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:47:39 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:47:40 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:47:40 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:47:41 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:47:41 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-04 02:52:41 | INFO | mpy_cli | 开始擦除 [1/6]: 设备文件系统
+2026-07-04 02:52:42 | INFO | mpy_cli | 完成擦除 [1/6]: 设备文件系统
+2026-07-04 02:52:42 | INFO | mpy_cli | 开始上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:52:42 | INFO | mpy_cli | 完成上传 [2/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-04 02:52:42 | INFO | mpy_cli | 开始上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:52:43 | INFO | mpy_cli | 完成上传 [3/6]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-04 02:52:43 | INFO | mpy_cli | 开始上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:52:44 | INFO | mpy_cli | 完成上传 [4/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-04 02:52:44 | INFO | mpy_cli | 开始上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:52:44 | INFO | mpy_cli | 完成上传 [5/6]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-04 02:52:44 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:52:45 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-04 02:52:45 | INFO | mpy_cli | 部署完成: success=6 failure=0
