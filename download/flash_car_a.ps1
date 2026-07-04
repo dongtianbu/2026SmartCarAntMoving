@@ -7,8 +7,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = Join-Path $scriptRoot "CarA"
-$cliRoot = Join-Path (Split-Path -Parent $scriptRoot) "mpy-cli"
+$personalCodeRoot = Split-Path -Parent $scriptRoot
+$workspaceRoot = Split-Path -Parent $personalCodeRoot
+$projectRoot = Join-Path $personalCodeRoot "CarA"
+$cliRoot = Join-Path $workspaceRoot "mpy-cli"
 $venvPython = Join-Path $cliRoot ".venv\Scripts\python.exe"
 
 if (Test-Path $venvPython) {
@@ -36,6 +38,14 @@ if ([string]::IsNullOrWhiteSpace($Port)) {
 
 if ([string]::IsNullOrWhiteSpace($Port)) {
     throw "Serial port is required."
+}
+
+if (-not (Test-Path $projectRoot)) {
+    throw "CarA project directory not found: $projectRoot"
+}
+
+if (-not (Test-Path $cliRoot)) {
+    throw "mpy-cli directory not found: $cliRoot"
 }
 
 Push-Location $projectRoot
@@ -77,6 +87,9 @@ try {
         if ($deployText -match "failed to access" -or $deployText -match "in use by another program") {
             Write-Host "COM port is busy." -ForegroundColor Yellow
             Write-Host "Close Thonny, serial assistants, mpremote terminals, or any program using $Port, then try again." -ForegroundColor Yellow
+        } elseif ($Mode -eq "incremental" -and $deployText -match "not a git repository") {
+            Write-Host "Incremental deploy requires CarA to be inside a valid Git repository." -ForegroundColor Yellow
+            Write-Host "Current expected repository root: $personalCodeRoot" -ForegroundColor Yellow
         } elseif ($deployText -match "No module named" -or $deployText -match "not found") {
             Write-Host "If mpremote is missing, install it with:" -ForegroundColor Yellow
             Write-Host "  python -m pip install mpremote" -ForegroundColor Yellow
