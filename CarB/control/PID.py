@@ -1,18 +1,9 @@
 
-"""基础 PID 与直行控制。
-
-最常直接调用的入口：
-- `PID.compute(...)`：通用 PID 计算
-- `StraightLineController.start()`
-- `StraightLineController.update(...)`
-"""
-
 from machine import Pin
 import time
 
 
 class PID:
-    """通用 PID 控制器。"""
     def __init__(self, kp=0, ki=0, kd=0, output_min=-9500, output_max=9500, integral_limit=None):
         self.kp = kp
         self.ki = ki
@@ -25,12 +16,10 @@ class PID:
         self.last_error = 0
 
     def reset(self):
-        """清空积分项和上一拍误差。"""
         self.integral = 0
         self.last_error = 0
 
     def compute(self, target, current):
-        """根据目标值和当前值，算出本次控制输出。"""
         error = target - current
 
         p_out = self.kp * error
@@ -49,13 +38,6 @@ class PID:
 
 
 class StraightLineController:
-    """基于 IMU 航向角的直行控制器。
-
-    使用顺序：
-    1. 先创建并初始化 IMU；
-    2. `controller.start(...)`
-    3. 在主循环里反复调用 `update(motor_1, motor_3)`。
-    """
     def __init__(self, imu, base_duty=6300, kp=50, ki=3, kd=40, dead_zone=0.3):
         self.imu = imu
         self.base_duty = base_duty
@@ -65,7 +47,6 @@ class StraightLineController:
         self.running = False
 
     def start(self, base_duty=None, yaw_target=None):
-        """开始直行控制，并锁定目标航向。"""
         if base_duty is not None:
             self.base_duty = base_duty
         self.yaw_target = yaw_target if yaw_target is not None else self.imu.yaw
@@ -73,12 +54,10 @@ class StraightLineController:
         self.running = True
 
     def stop(self):
-        """停止控制并清空 PID 状态。"""
         self.running = False
         self.yaw_pid.reset()
 
     def update(self, motor_1, motor_3):
-        """直行控制主更新入口。"""
         data = self.imu.update()
         if data is None or not self.running:
             return None

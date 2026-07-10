@@ -1,11 +1,7 @@
-"""视觉追踪控制器。
+"""颜色目标追踪控制器。
 
-这个模块负责把视觉框位置误差转换成底盘运动命令。
-
-最常直接调用的入口：
-1. `controller = ColorTraceController(mcx_usart)`
-2. `controller.start()`
-3. 在主循环里反复调用 `controller.update(m1, m2, m3)`
+本文件只处理视觉目标相对屏幕中心的位置误差，并输出底盘平移控制量。
+主车颜色追踪默认参数与参考工程颜色追踪入口保持一致，便于复现同一套调参结果。
 """
 
 import time
@@ -13,8 +9,69 @@ from control import MotorControl
 from connection.MCXVisionUsart import MCXVisionUsart
 
 
+# ---------------------------------------------------------------------------
+# 人工调参区
+# ---------------------------------------------------------------------------
+
+# 默认基础占空比。当前版本主要保留给状态输出和兼容旧调用使用，不直接作为电机输出。
+COLOR_BASE_DUTY_DEFAULT = 6000
+
+# 颜色追踪允许的最大 PWM 占空比。数值越大，目标偏离中心时平移越猛。
+# 速度到占空比的基础换算在 MotorControl 中完成：
+#   duty = speed * (max_duty / 100)
+# 例如 max_duty=7500 时，speed=36 的理论占空比约为 36*75=2700。
+# 之后 MotorControl 还会按三轮混合结果做等比例缩放，独立颜色追踪模式下
+# `_scale_duty_vector()` 会把整组三轮占空比按同一比例抬到启动区间。
+# 注意这里必须整组缩放，不能逐个轮子单独抬高，否则会破坏三轮全向底盘的运动比例，
+# 例如左移时原本约为 0.5:-1:0.5 的轮速比例会被拉成接近 1:-1:1，从而引入明显旋转。
+# 如果目标在中心附近大幅来回抖动，优先降低这个值或下面的 COLOR_MAX_TRACKING_SPEED_DEFAULT。
+COLOR_MAX_TRACKING_DUTY_DEFAULT = 7500
+
+# 颜色追踪非零输出的最小 PWM 占空比。独立调用 update(m1,m2,m3) 时会用它抬高电机启动量。
+COLOR_MIN_TRACKING_DUTY_DEFAULT = 5700
+
+# 丢失视觉帧后的短暂保持时间，单位 ms。数值过大可能导致目标丢失后还继续冲。
+COLOR_TARGET_HOLD_MS_DEFAULT = 120
+
+# X 方向比例系数。该 PID 参数与参考工程颜色追踪入口参数一致。
+COLOR_KP_X_DEFAULT = 0.2
+
+# X 方向微分系数。该 PID 参数与参考工程颜色追踪入口参数一致。
+COLOR_KD_X_DEFAULT = 0.75
+
+# Y 方向比例系数。该 PID 参数与参考工程颜色追踪入口参数一致。
+COLOR_KP_Y_DEFAULT = 0.2
+
+# Y 方向微分系数。该 PID 参数与参考工程颜色追踪入口参数一致。
+COLOR_KD_Y_DEFAULT = 0.75
+
+# 进入中心区阈值，单位像素。目标误差小于该值时认为已经居中并停止平移修正。
+COLOR_CENTER_ENTER_ZONE_DEFAULT = 6
+
+# 离开中心区阈值，单位像素。必须大于进入阈值，用迟滞避免目标在边界附近反复启停。
+COLOR_CENTER_EXIT_ZONE_DEFAULT = 22
+
+# 视觉目标中心点一阶滤波系数，范围 0.05~1.0。越小越稳但越慢，越大响应越快。
+COLOR_INPUT_FILTER_ALPHA_DEFAULT = 0.25
+
+# 平移速度指令一阶滤波系数，范围 0.05~1.0。越小电机输出越柔和，越大响应越快。
+COLOR_COMMAND_FILTER_ALPHA_DEFAULT = 0.18
+
+# 颜色追踪平移速度最大值，单位是 MotorControl 的 speed 标度 0~100。
+# 这个值不是占空比，而是先作为底盘 vx/vy 速度参与三轮解算。
+# 在默认 max_duty=7500 时，单个轮子的理论占空比约为 speed*75；
+# 例如 speed=30 约等于 2250 duty，speed=40 约等于 3000 duty。
+# 这是抑制大幅抖动最直接的限幅；若追踪太慢再逐步增加。
+COLOR_MAX_TRACKING_SPEED_DEFAULT = 36.0
+
+# 平移速度每次 update 最大变化量。它限制的是 speed 变化量，不是 duty 变化量。
+# 在 max_duty=7500 时，每增加 1 speed 理论上约增加 75 duty；
+# 当前 1.5 speed 约等于每次最多变化 112 duty，实际还会受三轮混合影响。
+# 数值越小加减速越柔和，但太小会追不上快速目标。
+COLOR_COMMAND_RAMP_STEP_DEFAULT = 1.5
+
+
 class PID:
-    """给视觉追踪内部使用的简化 PID。"""
     def __init__(self, kp=0, ki=0, kd=0, output_min=-100, output_max=100, integral_limit=None):
         self.kp = kp
         self.ki = ki
@@ -49,7 +106,6 @@ class PID:
 
 
 class ColorTraceController:
-    """根据视觉模块输出，驱动小车自动追目标。"""
     SCREEN_W = 160
     SCREEN_H = 120
     CENTER_X = SCREEN_W // 2
@@ -58,22 +114,20 @@ class ColorTraceController:
     def __init__(
         self,
         mcx_usart,
-        base_duty=6000,
-        max_tracking_duty=7500,
-        min_tracking_duty=5700,
-        target_hold_ms=120,
-        kp_x=3.0,
-        kd_x=0.2,
-        kp_y=3.0,
-        kd_y=0.2,
-        dead_zone=10,
-        center_exit_zone=None,
-        input_filter_alpha=0.35,
-        command_filter_alpha=0.22,
-        near_center_min_duty=2200,
-        near_center_max_duty=4200,
-        slow_zone=20,
-        duty_ramp_step=220,
+        base_duty=COLOR_BASE_DUTY_DEFAULT,
+        max_tracking_duty=COLOR_MAX_TRACKING_DUTY_DEFAULT,
+        min_tracking_duty=COLOR_MIN_TRACKING_DUTY_DEFAULT,
+        target_hold_ms=COLOR_TARGET_HOLD_MS_DEFAULT,
+        kp_x=COLOR_KP_X_DEFAULT,
+        kd_x=COLOR_KD_X_DEFAULT,
+        kp_y=COLOR_KP_Y_DEFAULT,
+        kd_y=COLOR_KD_Y_DEFAULT,
+        dead_zone=COLOR_CENTER_ENTER_ZONE_DEFAULT,
+        center_exit_zone=COLOR_CENTER_EXIT_ZONE_DEFAULT,
+        input_filter_alpha=COLOR_INPUT_FILTER_ALPHA_DEFAULT,
+        command_filter_alpha=COLOR_COMMAND_FILTER_ALPHA_DEFAULT,
+        max_tracking_speed=COLOR_MAX_TRACKING_SPEED_DEFAULT,
+        command_ramp_step=COLOR_COMMAND_RAMP_STEP_DEFAULT,
     ):
         self.mcx = mcx_usart
         self.SCREEN_W = getattr(mcx_usart, "VIEW_WIDTH", self.SCREEN_W)
@@ -82,25 +136,20 @@ class ColorTraceController:
         self.CENTER_Y = self.SCREEN_H // 2
 
         self.base_duty = base_duty
-        self.dead_zone = dead_zone
-        if center_exit_zone is None:
-            center_exit_zone = self.dead_zone + 2
+        self.dead_zone = max(0, int(dead_zone))
         self.center_exit_zone = max(self.dead_zone, int(center_exit_zone))
+        self.input_filter_alpha = min(1.0, max(0.05, float(input_filter_alpha)))
+        self.command_filter_alpha = min(1.0, max(0.05, float(command_filter_alpha)))
+        self.command_ramp_step = max(0.0, float(command_ramp_step))
         self.buf = bytearray()
         self.max_tracking_duty = min(MotorControl.MAX_DUTY, int(max_tracking_duty))
         self.min_tracking_duty = min(self.max_tracking_duty, max(0, int(min_tracking_duty)))
-        self.near_center_min_duty = min(self.min_tracking_duty, max(0, int(near_center_min_duty)))
-        self.near_center_max_duty = min(self.max_tracking_duty, max(self.near_center_min_duty, int(near_center_max_duty)))
         self.target_hold_ms = max(0, int(target_hold_ms))
-        self.input_filter_alpha = min(1.0, max(0.05, float(input_filter_alpha)))
-        self.command_filter_alpha = min(1.0, max(0.05, float(command_filter_alpha)))
-        self.slow_zone = max(self.dead_zone + 2, int(slow_zone))
-        self.duty_ramp_step = max(1, int(duty_ramp_step))
-        self.max_tracking_speed = max(
-            20, int(self.max_tracking_duty * MotorControl.MAX_SPEED / MotorControl.MAX_DUTY)
+        self.max_tracking_speed = min(
+            int(self.max_tracking_duty * MotorControl.MAX_SPEED / MotorControl.MAX_DUTY),
+            max(1.0, float(max_tracking_speed)),
         )
 
-        # X/Y 两路 PID 的输出会在后面换算成底盘平移指令。
         self.x_pid = PID(
             kp=kp_x,
             ki=0,
@@ -125,15 +174,15 @@ class ColorTraceController:
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
-        self.target_duty = (0, 0, 0)
         self.filtered_cx = None
         self.filtered_cy = None
+        self.filtered_vx = 0.0
+        self.filtered_vy = 0.0
+        self.command_vx = 0.0
+        self.command_vy = 0.0
         self.centered = False
-        self.filtered_cmd_vx = 0.0
-        self.filtered_cmd_vy = 0.0
 
     def start(self):
-        """开始追踪，重置所有内部状态。"""
         self.x_pid.reset()
         self.y_pid.reset()
         self.buf = bytearray()
@@ -146,15 +195,15 @@ class ColorTraceController:
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
-        self.target_duty = (0, 0, 0)
         self.filtered_cx = None
         self.filtered_cy = None
+        self.filtered_vx = 0.0
+        self.filtered_vy = 0.0
+        self.command_vx = 0.0
+        self.command_vy = 0.0
         self.centered = False
-        self.filtered_cmd_vx = 0.0
-        self.filtered_cmd_vy = 0.0
 
     def stop(self):
-        """停止追踪，只清理控制状态，不主动断电机。"""
         self.running = False
         self.last_frame = None
         self.last_frame_ms = None
@@ -164,15 +213,15 @@ class ColorTraceController:
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
-        self.target_duty = (0, 0, 0)
         self.filtered_cx = None
         self.filtered_cy = None
+        self.filtered_vx = 0.0
+        self.filtered_vy = 0.0
+        self.command_vx = 0.0
+        self.command_vy = 0.0
         self.centered = False
-        self.filtered_cmd_vx = 0.0
-        self.filtered_cmd_vy = 0.0
 
     def _apply_duty(self, motor_1, motor_2, motor_3, duty):
-        """内部函数：把三个电机占空比真正写下去。"""
         d1, d2, d3 = duty
         motor_1.duty(d1)
         motor_2.duty(d2)
@@ -180,106 +229,33 @@ class ColorTraceController:
         self.last_duty = duty
 
     def _stop_motors(self, motor_1, motor_2, motor_3):
-        """内部函数：把三电机全部停下。"""
         self._apply_duty(motor_1, motor_2, motor_3, (0, 0, 0))
         self.last_raw_duty = (0, 0, 0)
-        self.target_duty = (0, 0, 0)
 
-    def _scale_duty_vector(self, raw_duty, active_min_duty, active_max_duty):
-        """内部函数：把运动命令缩放到当前允许的占空比范围。"""
-        if active_max_duty <= 0:
-            return (0, 0, 0)
-
+    def _scale_duty_vector(self, raw_duty):
+        """按同一比例缩放三轮占空比，既帮助起转，又保持底盘运动方向不变。"""
         max_abs_duty = max(abs(int(value)) for value in raw_duty)
         if max_abs_duty <= 0:
             return (0, 0, 0)
 
         scale = 1.0
-        if active_min_duty > 0 and max_abs_duty < active_min_duty:
-            scale = active_min_duty / float(max_abs_duty)
+        if 0 < max_abs_duty < self.min_tracking_duty:
+            # 只让“最大那个轮子”达到最小启动占空比，其余轮子按原比例同步放大。
+            # 这样能避免逐轮单独抬升导致左右/前后轮比例失真，从而减少平移时附带旋转。
+            scale = self.min_tracking_duty / float(max_abs_duty)
 
-        if max_abs_duty * scale > active_max_duty:
-            scale = active_max_duty / float(max_abs_duty)
+        if max_abs_duty * scale > self.max_tracking_duty:
+            scale = self.max_tracking_duty / float(max_abs_duty)
 
         return tuple(
-            max(-active_max_duty, min(active_max_duty, int(round(value * scale))))
+            max(
+                -self.max_tracking_duty,
+                min(self.max_tracking_duty, int(round(value * scale)))
+            )
             for value in raw_duty
         )
 
-    def _filter_center(self, cx, cy):
-        """内部函数：对识别框中心点做一阶滤波，减少抖动。"""
-        if self.filtered_cx is None or self.filtered_cy is None:
-            self.filtered_cx = cx
-            self.filtered_cy = cy
-        else:
-            alpha = self.input_filter_alpha
-            self.filtered_cx += alpha * (cx - self.filtered_cx)
-            self.filtered_cy += alpha * (cy - self.filtered_cy)
-        return self.filtered_cx, self.filtered_cy
-
-    def _filter_command(self, vx, vy):
-        """内部函数：对控制指令再做一次平滑，减少电机突变。"""
-        alpha = self.command_filter_alpha
-        self.filtered_cmd_vx += alpha * (vx - self.filtered_cmd_vx)
-        self.filtered_cmd_vy += alpha * (vy - self.filtered_cmd_vy)
-        return self.filtered_cmd_vx, self.filtered_cmd_vy
-
-    def _motion_limits(self, err_x, err_y):
-        """根据误差大小动态调整当前运动速度上限/下限。"""
-        error_mag = max(abs(err_x), abs(err_y))
-        if error_mag <= self.dead_zone:
-            # 靠近中心时，允许用更柔和的动作修正，甚至直接停下。
-            return 0, self.near_center_max_duty
-
-        span = max(1.0, float(self.slow_zone - self.dead_zone))
-        ratio = min(1.0, max(0.0, (error_mag - self.dead_zone) / span))
-
-        active_min_duty = self.near_center_min_duty + int(
-            (self.min_tracking_duty - self.near_center_min_duty) * ratio
-        )
-        active_max_duty = self.near_center_max_duty + int(
-            (self.max_tracking_duty - self.near_center_max_duty) * ratio
-        )
-        active_max_duty = max(active_min_duty, active_max_duty)
-        return active_min_duty, active_max_duty
-
-    def _step_towards(self, current, target, step):
-        if current < target:
-            return min(current + step, target)
-        if current > target:
-            return max(current - step, target)
-        return current
-
-    def _ramp_duty_towards(self, motor_1, motor_2, motor_3, target_duty):
-        """按步进把电机输出逐步逼近目标，占空比变化更平滑。"""
-        duty = tuple(
-            self._step_towards(current, target, self.duty_ramp_step)
-            for current, target in zip(self.last_duty, target_duty)
-        )
-        self._apply_duty(motor_1, motor_2, motor_3, duty)
-        return duty
-
-    def _reset_tracking_state(self, clear_last_frame=True):
-        """内部函数：在丢目标或停止时重置追踪状态。"""
-        if clear_last_frame:
-            self.last_frame = None
-            self.last_frame_ms = None
-            self.last_frame_idx = None
-        self.correction_x = 0
-        self.correction_y = 0
-        self.moving = False
-        self.last_raw_duty = (0, 0, 0)
-        self.target_duty = (0, 0, 0)
-        self.filtered_cx = None
-        self.filtered_cy = None
-        self.centered = False
-        self.filtered_cmd_vx = 0.0
-        self.filtered_cmd_vy = 0.0
-        self.x_pid.reset()
-        self.y_pid.reset()
-
     def _recv_frames(self):
-        """从串口缓冲区中尽可能多地解析视觉帧。"""
         frames = []
 
         while self.mcx.available() > 0:
@@ -295,13 +271,37 @@ class ColorTraceController:
                 frames.append(frame)
                 self.buf = self.buf[frame_size:]
             else:
-                # 每次前移 1 字节，直到串口流重新对齐到完整帧。
                 self.buf = self.buf[1:]
 
         return frames
 
+    def _reset_motion_command(self):
+        """清空平移控制量，避免进入中心或丢目标后旧速度继续残留。"""
+        self.correction_x = 0
+        self.correction_y = 0
+        self.filtered_vx = 0.0
+        self.filtered_vy = 0.0
+        self.command_vx = 0.0
+        self.command_vy = 0.0
+        self.moving = False
+        self.last_raw_duty = (0, 0, 0)
+        self.last_duty = (0, 0, 0)
+        self.x_pid.reset()
+        self.y_pid.reset()
+
+    def _filter_center(self, cx, cy):
+        """对视觉中心点做一阶滤波，减少识别框跳动直接传到电机。"""
+        if self.filtered_cx is None or self.filtered_cy is None:
+            self.filtered_cx = cx
+            self.filtered_cy = cy
+        else:
+            alpha = self.input_filter_alpha
+            self.filtered_cx += alpha * (cx - self.filtered_cx)
+            self.filtered_cy += alpha * (cy - self.filtered_cy)
+        return self.filtered_cx, self.filtered_cy
+
     def _is_in_center(self, err_x, err_y):
-        """判断目标是否进入中心区域，并带一点迟滞避免抖动。"""
+        """带迟滞判断目标是否在中心区，避免中心边界附近反复启停。"""
         if self.centered:
             if abs(err_x) > self.center_exit_zone or abs(err_y) > self.center_exit_zone:
                 self.centered = False
@@ -309,8 +309,31 @@ class ColorTraceController:
             self.centered = True
         return self.centered
 
+    def _filter_command(self, vx, vy):
+        """对平移速度做一阶滤波，让追踪动作更柔和。"""
+        alpha = self.command_filter_alpha
+        self.filtered_vx += alpha * (vx - self.filtered_vx)
+        self.filtered_vy += alpha * (vy - self.filtered_vy)
+        return self.filtered_vx, self.filtered_vy
+
+    def _step_towards(self, current, target):
+        """按固定步长逼近目标速度，限制每次循环的速度突变。"""
+        step = self.command_ramp_step
+        if step <= 0:
+            return target
+        if current < target:
+            return min(current + step, target)
+        if current > target:
+            return max(current - step, target)
+        return current
+
+    def _ramp_command(self, vx, vy):
+        """分别限制 vx/vy 的变化率，降低中心附近大幅来回摆动。"""
+        self.command_vx = self._step_towards(self.command_vx, vx)
+        self.command_vy = self._step_towards(self.command_vy, vy)
+        return self.command_vx, self.command_vy
+
     def _frame_to_state(self, frame):
-        """把原始视觉帧转换成更方便控制的误差状态。"""
         cx, cy = self._filter_center(frame["center_x"], frame["center_y"])
         err_x = self.CENTER_X - cx
         err_y = self.CENTER_Y - cy
@@ -319,13 +342,12 @@ class ColorTraceController:
         return cx, cy, err_x, err_y, box, in_center
 
     def _target_is_recent(self, now_ms):
-        """判断“上一次目标”是否还可以短暂复用。"""
         if self.last_frame is None or self.last_frame_ms is None:
             return False
         return time.ticks_diff(now_ms, self.last_frame_ms) <= self.target_hold_ms
 
-    def update(self, motor_1, motor_2, motor_3):
-        """视觉追踪主更新入口。"""
+    def update_tracking_command(self):
+        """只计算颜色追踪控制量，不直接驱动电机。"""
         if not self.running:
             return None
 
@@ -334,7 +356,6 @@ class ColorTraceController:
 
         has_target_now = False
         target_locked = False
-        explicit_no_target = False
         cx = self.CENTER_X
         cy = self.CENTER_Y
         err_x = 0
@@ -347,7 +368,6 @@ class ColorTraceController:
             self.last_frame_idx = frame["idx"]
 
             if frame.get("has_target", False):
-                # 收到新的有效目标后，更新锁定状态并重新计算 PID 修正量。
                 self.last_frame = frame
                 self.last_frame_ms = now_ms
                 has_target_now = True
@@ -360,65 +380,59 @@ class ColorTraceController:
                     self.correction_y = self.y_pid.compute(0, err_y)
                     self.moving = True
                 else:
-                    self.correction_x = 0
-                    self.correction_y = 0
-                    self.moving = False
-                    self.x_pid.reset()
-                    self.y_pid.reset()
+                    self._reset_motion_command()
             else:
-                explicit_no_target = True
-                if self._target_is_recent(now_ms):
-                    # 短暂丢目标时复用上一帧稳定结果，避免控制抖动。
-                    target_locked = True
-                    cx, cy, err_x, err_y, box, in_center = self._frame_to_state(self.last_frame)
-                else:
-                    self._reset_tracking_state(clear_last_frame=True)
+                # 明确收到无目标帧时，立即清空控制量。
+                self.last_frame = None
+                self.last_frame_ms = None
+                self.filtered_cx = None
+                self.filtered_cy = None
+                self.centered = False
+                self._reset_motion_command()
         elif self._target_is_recent(now_ms):
-            # Only short packet loss is allowed to reuse the last valid target.
+            # 只允许短时间丢包复用上一帧有效目标。
             target_locked = True
             cx, cy, err_x, err_y, box, in_center = self._frame_to_state(self.last_frame)
+            if in_center:
+                self._reset_motion_command()
         else:
-            self._reset_tracking_state(clear_last_frame=True)
+            self.last_frame = None
+            self.last_frame_ms = None
+            self.last_frame_idx = None
+            self.filtered_cx = None
+            self.filtered_cy = None
+            self.centered = False
+            self._reset_motion_command()
+
+        vx = 0
+        vy = 0
 
         if self.moving and target_locked and not in_center and has_target_now:
-            # 有新目标数据时，生成新的运动向量和目标 PWM。
-            active_min_duty, active_max_duty = self._motion_limits(err_x, err_y)
-            command_vx, command_vy = self._filter_command(
+            filtered_vx, filtered_vy = self._filter_command(
                 self.correction_x,
                 -self.correction_y,
             )
+            vx, vy = self._ramp_command(filtered_vx, filtered_vy)
             raw_duty = MotorControl.vector_to_duty(
-                command_vx,
-                command_vy,
-                max_duty=active_max_duty,
+                vx,
+                vy,
+                max_duty=self.max_tracking_duty,
                 min_duty_start=0,
             )
-            self.target_duty = self._scale_duty_vector(
-                raw_duty, active_min_duty, active_max_duty
-            )
+            duty = self._scale_duty_vector(raw_duty)
             self.last_raw_duty = raw_duty
-            duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
+            self.last_duty = duty
         elif self.moving and target_locked and not in_center:
-            # 两帧新数据之间，继续平滑逼近最近一次目标占空比。
+            vx = self.command_vx
+            vy = self.command_vy
             raw_duty = self.last_raw_duty
-            duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
-        elif explicit_no_target:
-            raw_duty = (0, 0, 0)
-            if target_locked and self.target_duty != (0, 0, 0):
-                # 仍在目标保持窗口内时，优先平滑减速而不是立刻急停。
-                duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
-            else:
-                self._stop_motors(motor_1, motor_2, motor_3)
-                duty = self.last_duty
+            duty = self.last_duty
         else:
+            vx, vy = self._ramp_command(0.0, 0.0)
             raw_duty = (0, 0, 0)
-            self.target_duty = (0, 0, 0)
-            # 没有目标且没有近期锁定时，平滑回到完全停止状态。
-            duty = self._ramp_duty_towards(motor_1, motor_2, motor_3, self.target_duty)
-            if duty == (0, 0, 0):
-                self.last_raw_duty = (0, 0, 0)
-                self.filtered_cmd_vx = 0.0
-                self.filtered_cmd_vy = 0.0
+            duty = (0, 0, 0)
+            self.last_raw_duty = raw_duty
+            self.last_duty = duty
 
         return {
             "has_target": has_target_now,
@@ -437,9 +451,20 @@ class ColorTraceController:
             "moving": self.moving,
             "in_center": target_locked and in_center,
             "box": box,
+            "vx": vx,
+            "vy": vy,
             "raw_duty": raw_duty,
-            "duty": self.last_duty,
-            "target_duty": self.target_duty,
-            "filtered_cx": cx,
-            "filtered_cy": cy,
+            "duty": duty,
         }
+
+    def update(self, motor_1, motor_2, motor_3):
+        state = self.update_tracking_command()
+        if state is None:
+            return None
+
+        if state["moving"] and state["target_locked"] and not state["in_center"]:
+            self._apply_duty(motor_1, motor_2, motor_3, state["duty"])
+        else:
+            self._stop_motors(motor_1, motor_2, motor_3)
+
+        return state

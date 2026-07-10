@@ -56,7 +56,7 @@ class WirelessUsartCars:
     def __init__(
         self,
         uart_id=2,
-        baudrate=460800,
+        baudrate=115200,
         bits=8,
         parity=None,
         stop=1,
@@ -406,6 +406,6 @@ class WirelessUsartCars:
             self._uart.init(**kwargs)
 
 
-def create_wireless_usart_cars(uart_id=2, baudrate=460800, self_id=1):
+def create_wireless_usart_cars(uart_id=2, baudrate=115200, self_id=1):
     """快速创建 `WirelessUsartCars` 对象的便捷入口。"""
     return WirelessUsartCars(uart_id=uart_id, baudrate=baudrate, self_id=self_id)

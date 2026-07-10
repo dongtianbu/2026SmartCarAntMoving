@@ -1,13 +1,3 @@
-"""MCX 视觉模块串口封装。
-
-直接调用时常用入口：
-- `recv_bytes()`：拿原始字节
-- `parse_frame(raw)`：解析一帧视觉结果
-- `clear_rx()`：开始识别前清空残留数据
-
-如果你只是想拿到“目标框中心点和边界框”，这个类就是主入口。
-"""
-
 from machine import UART
 import struct
 
@@ -21,7 +11,6 @@ VIEW_HEIGHT = 120
 
 
 class MCXVisionUsart:
-    """读取并解析视觉模块输出的固定长度帧。"""
     FRAME_HEADER = FRAME_HEADER
     FRAME_TAIL = FRAME_TAIL
     FRAME_SIZE = FRAME_SIZE
@@ -43,7 +32,6 @@ class MCXVisionUsart:
         return self._baudrate
 
     def send(self, data):
-        """发送原始数据到视觉串口，一般调试时才会用到。"""
         if isinstance(data, str):
             data = data.encode("utf-8")
         return self._uart.write(data)
@@ -80,7 +68,6 @@ class MCXVisionUsart:
         return self._uart.readinto(buf)
 
     def recv_str(self, size=None):
-        """读取并尽量转成字符串，调试串口时比较方便。"""
         data = self.read(size)
         if data is not None:
             try:
@@ -95,13 +82,14 @@ class MCXVisionUsart:
     @staticmethod
     def parse_frame(raw):
         """
-        解析一帧视觉数据。
+        Parse one MCXVision frame.
 
-        这是本文件最重要的“直接调用入口”之一。
-        输入完整 11 字节原始帧，输出一个易读字典：
-        - `has_target`：当前是否识别到目标
-        - `x1/y1/x2/y2`：目标框四个边界
-        - `center_x/center_y`：目标中心
+        Protocol:
+        [0xAA][idx][x1_L][x1_H][y1_L][y1_H][x2_L][x2_H][y2_L][y2_H][0xFF]
+
+        idx:
+        - 0   : target detected
+        - 255 : no target
         """
         if raw is None or len(raw) < FRAME_SIZE:
             return None
@@ -116,22 +104,10 @@ class MCXVisionUsart:
             y2 = struct.unpack("<H", raw[8:10])[0]
 
             has_target = (idx != NO_TARGET_IDX)
-            if has_target:
-                if not (0 <= x1 <= x2 < VIEW_WIDTH and 0 <= y1 <= y2 < VIEW_HEIGHT):
-                    return None
-                width = (x2 - x1 + 1)
-                height = (y2 - y1 + 1)
-                center_x = (x1 + x2) / 2.0
-                center_y = (y1 + y2) / 2.0
-            else:
-                x1 = 0
-                y1 = 0
-                x2 = 0
-                y2 = 0
-                width = 0
-                height = 0
-                center_x = VIEW_WIDTH / 2.0
-                center_y = VIEW_HEIGHT / 2.0
+            width = (x2 - x1 + 1) if x2 >= x1 else 0
+            height = (y2 - y1 + 1) if y2 >= y1 else 0
+            center_x = (x1 + x2) / 2.0
+            center_y = (y1 + y2) / 2.0
 
             return {
                 "idx": idx,
@@ -151,12 +127,10 @@ class MCXVisionUsart:
             return None
 
     def clear_rx(self):
-        """清空视觉串口接收区，避免旧数据影响新一轮识别。"""
         while self._uart.any() > 0:
             self._uart.read(self._uart.any())
 
     def reinit(self, baudrate=None, bits=None, parity=None, stop=None):
-        """重新配置视觉串口参数。"""
         kwargs = {}
         if baudrate is not None:
             kwargs["baudrate"] = baudrate
@@ -171,7 +145,6 @@ class MCXVisionUsart:
 
 
 def create_mcx_usart(baudrate=115200):
-    """快速创建视觉串口对象。"""
     return MCXVisionUsart(baudrate)
 
 
