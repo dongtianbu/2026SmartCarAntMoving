@@ -124,3 +124,87 @@
 2026-07-04 02:52:44 | INFO | mpy_cli | 开始上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
 2026-07-04 02:52:45 | INFO | mpy_cli | 完成上传 [6/6]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
 2026-07-04 02:52:45 | INFO | mpy_cli | 部署完成: success=6 failure=0
+2026-07-08 21:22:19 | INFO | mpy_cli | 开始擦除 [1/13]: 设备文件系统
+2026-07-08 21:22:20 | ERROR | mpy_cli | 擦除失败 [1/13]: 设备文件系统 | mpremote: failed to access . (it may be in use by another program)
+2026-07-08 21:22:20 | INFO | mpy_cli | 部署完成: success=0 failure=1
+2026-07-08 21:24:21 | INFO | mpy_cli | 开始擦除 [1/13]: 设备文件系统
+2026-07-08 21:24:22 | ERROR | mpy_cli | 擦除失败 [1/13]: 设备文件系统 | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:24:22 | INFO | mpy_cli | 部署完成: success=0 failure=1
+2026-07-08 21:25:18 | INFO | mpy_cli | 开始擦除 [1/13]: 设备文件系统
+2026-07-08 21:25:19 | INFO | mpy_cli | 完成擦除 [1/13]: 设备文件系统
+2026-07-08 21:25:19 | INFO | mpy_cli | 开始上传 [2/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-08 21:25:19 | INFO | mpy_cli | 完成上传 [2/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-08 21:25:19 | INFO | mpy_cli | 开始上传 [3/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-08 21:25:19 | INFO | mpy_cli | 完成上传 [3/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-08 21:25:19 | INFO | mpy_cli | 开始上传 [4/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-08 21:25:21 | INFO | mpy_cli | 完成上传 [4/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-08 21:25:21 | INFO | mpy_cli | 开始上传 [5/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-08 21:25:21 | INFO | mpy_cli | 完成上传 [5/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-08 21:25:21 | INFO | mpy_cli | 开始上传 [6/13]: D:/2026_SmartCar/PersonalCode/CarB/control/ColorTrace.py -> :control/ColorTrace.py
+2026-07-08 21:25:22 | INFO | mpy_cli | 完成上传 [6/13]: D:/2026_SmartCar/PersonalCode/CarB/control/ColorTrace.py -> :control/ColorTrace.py
+2026-07-08 21:25:22 | INFO | mpy_cli | 开始上传 [7/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorControl.py -> :control/MotorControl.py
+2026-07-08 21:25:23 | INFO | mpy_cli | 完成上传 [7/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorControl.py -> :control/MotorControl.py
+2026-07-08 21:25:23 | INFO | mpy_cli | 开始上传 [8/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorEncoder.py -> :control/MotorEncoder.py
+2026-07-08 21:25:24 | INFO | mpy_cli | 完成上传 [8/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorEncoder.py -> :control/MotorEncoder.py
+2026-07-08 21:25:24 | INFO | mpy_cli | 开始上传 [9/13]: D:/2026_SmartCar/PersonalCode/CarB/control/PID.py -> :control/PID.py
+2026-07-08 21:25:25 | INFO | mpy_cli | 完成上传 [9/13]: D:/2026_SmartCar/PersonalCode/CarB/control/PID.py -> :control/PID.py
+2026-07-08 21:25:25 | INFO | mpy_cli | 开始上传 [10/13]: D:/2026_SmartCar/PersonalCode/CarB/control/__init__.py -> :control/__init__.py
+2026-07-08 21:25:25 | INFO | mpy_cli | 完成上传 [10/13]: D:/2026_SmartCar/PersonalCode/CarB/control/__init__.py -> :control/__init__.py
+2026-07-08 21:25:25 | INFO | mpy_cli | 开始上传 [11/13]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-08 21:25:26 | INFO | mpy_cli | 完成上传 [11/13]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-08 21:25:26 | INFO | mpy_cli | 开始上传 [12/13]: D:/2026_SmartCar/PersonalCode/CarB/test/WirelessCarsHeartbeatTest.py -> :test/WirelessCarsHeartbeatTest.py
+2026-07-08 21:25:27 | INFO | mpy_cli | 完成上传 [12/13]: D:/2026_SmartCar/PersonalCode/CarB/test/WirelessCarsHeartbeatTest.py -> :test/WirelessCarsHeartbeatTest.py
+2026-07-08 21:25:27 | INFO | mpy_cli | 开始上传 [13/13]: D:/2026_SmartCar/PersonalCode/CarB/test/__init__.py -> :test/__init__.py
+2026-07-08 21:25:27 | INFO | mpy_cli | 完成上传 [13/13]: D:/2026_SmartCar/PersonalCode/CarB/test/__init__.py -> :test/__init__.py
+2026-07-08 21:25:27 | INFO | mpy_cli | 部署完成: success=13 failure=0
+2026-07-08 21:53:38 | INFO | mpy_cli | 开始上传 [1/10]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-08 21:53:39 | ERROR | mpy_cli | 上传失败 [1/10]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:39 | INFO | mpy_cli | 开始上传 [2/10]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-08 21:53:39 | ERROR | mpy_cli | 上传失败 [2/10]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:39 | INFO | mpy_cli | 开始上传 [3/10]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-08 21:53:39 | ERROR | mpy_cli | 上传失败 [3/10]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:39 | INFO | mpy_cli | 开始上传 [4/10]: D:/2026_SmartCar/PersonalCode/CarB/test/WirelessCarsHeartbeatTest.py -> :test/WirelessCarsHeartbeatTest.py
+2026-07-08 21:53:39 | ERROR | mpy_cli | 上传失败 [4/10]: D:/2026_SmartCar/PersonalCode/CarB/test/WirelessCarsHeartbeatTest.py -> :test/WirelessCarsHeartbeatTest.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:39 | INFO | mpy_cli | 开始上传 [5/10]: D:/2026_SmartCar/PersonalCode/CarB/test/__init__.py -> :test/__init__.py
+2026-07-08 21:53:39 | ERROR | mpy_cli | 上传失败 [5/10]: D:/2026_SmartCar/PersonalCode/CarB/test/__init__.py -> :test/__init__.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:39 | INFO | mpy_cli | 开始上传 [6/10]: D:/2026_SmartCar/PersonalCode/CarB/control/ColorTrace.py -> :control/ColorTrace.py
+2026-07-08 21:53:39 | ERROR | mpy_cli | 上传失败 [6/10]: D:/2026_SmartCar/PersonalCode/CarB/control/ColorTrace.py -> :control/ColorTrace.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:39 | INFO | mpy_cli | 开始上传 [7/10]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorControl.py -> :control/MotorControl.py
+2026-07-08 21:53:40 | ERROR | mpy_cli | 上传失败 [7/10]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorControl.py -> :control/MotorControl.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:40 | INFO | mpy_cli | 开始上传 [8/10]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorEncoder.py -> :control/MotorEncoder.py
+2026-07-08 21:53:40 | ERROR | mpy_cli | 上传失败 [8/10]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorEncoder.py -> :control/MotorEncoder.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:40 | INFO | mpy_cli | 开始上传 [9/10]: D:/2026_SmartCar/PersonalCode/CarB/control/PID.py -> :control/PID.py
+2026-07-08 21:53:40 | ERROR | mpy_cli | 上传失败 [9/10]: D:/2026_SmartCar/PersonalCode/CarB/control/PID.py -> :control/PID.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:40 | INFO | mpy_cli | 开始上传 [10/10]: D:/2026_SmartCar/PersonalCode/CarB/control/__init__.py -> :control/__init__.py
+2026-07-08 21:53:40 | ERROR | mpy_cli | 上传失败 [10/10]: D:/2026_SmartCar/PersonalCode/CarB/control/__init__.py -> :control/__init__.py | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:40 | INFO | mpy_cli | 部署完成: success=0 failure=10
+2026-07-08 21:53:50 | INFO | mpy_cli | 开始擦除 [1/13]: 设备文件系统
+2026-07-08 21:53:50 | ERROR | mpy_cli | 擦除失败 [1/13]: 设备文件系统 | mpremote: failed to access com7 (it may be in use by another program)
+2026-07-08 21:53:50 | INFO | mpy_cli | 部署完成: success=0 failure=1
+2026-07-08 21:54:10 | INFO | mpy_cli | 开始擦除 [1/13]: 设备文件系统
+2026-07-08 21:54:11 | INFO | mpy_cli | 完成擦除 [1/13]: 设备文件系统
+2026-07-08 21:54:11 | INFO | mpy_cli | 开始上传 [2/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-08 21:54:11 | INFO | mpy_cli | 完成上传 [2/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpy-cli.toml -> :.mpy-cli.toml
+2026-07-08 21:54:11 | INFO | mpy_cli | 开始上传 [3/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-08 21:54:11 | INFO | mpy_cli | 完成上传 [3/13]: D:/2026_SmartCar/PersonalCode/CarB/.mpyignore -> :.mpyignore
+2026-07-08 21:54:11 | INFO | mpy_cli | 开始上传 [4/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-08 21:54:13 | INFO | mpy_cli | 完成上传 [4/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/WirelessUsartCars.py -> :connection/WirelessUsartCars.py
+2026-07-08 21:54:13 | INFO | mpy_cli | 开始上传 [5/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-08 21:54:13 | INFO | mpy_cli | 完成上传 [5/13]: D:/2026_SmartCar/PersonalCode/CarB/connection/__init__.py -> :connection/__init__.py
+2026-07-08 21:54:13 | INFO | mpy_cli | 开始上传 [6/13]: D:/2026_SmartCar/PersonalCode/CarB/control/ColorTrace.py -> :control/ColorTrace.py
+2026-07-08 21:54:15 | INFO | mpy_cli | 完成上传 [6/13]: D:/2026_SmartCar/PersonalCode/CarB/control/ColorTrace.py -> :control/ColorTrace.py
+2026-07-08 21:54:15 | INFO | mpy_cli | 开始上传 [7/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorControl.py -> :control/MotorControl.py
+2026-07-08 21:54:16 | INFO | mpy_cli | 完成上传 [7/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorControl.py -> :control/MotorControl.py
+2026-07-08 21:54:16 | INFO | mpy_cli | 开始上传 [8/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorEncoder.py -> :control/MotorEncoder.py
+2026-07-08 21:54:17 | INFO | mpy_cli | 完成上传 [8/13]: D:/2026_SmartCar/PersonalCode/CarB/control/MotorEncoder.py -> :control/MotorEncoder.py
+2026-07-08 21:54:17 | INFO | mpy_cli | 开始上传 [9/13]: D:/2026_SmartCar/PersonalCode/CarB/control/PID.py -> :control/PID.py
+2026-07-08 21:54:18 | INFO | mpy_cli | 完成上传 [9/13]: D:/2026_SmartCar/PersonalCode/CarB/control/PID.py -> :control/PID.py
+2026-07-08 21:54:18 | INFO | mpy_cli | 开始上传 [10/13]: D:/2026_SmartCar/PersonalCode/CarB/control/__init__.py -> :control/__init__.py
+2026-07-08 21:54:18 | INFO | mpy_cli | 完成上传 [10/13]: D:/2026_SmartCar/PersonalCode/CarB/control/__init__.py -> :control/__init__.py
+2026-07-08 21:54:18 | INFO | mpy_cli | 开始上传 [11/13]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-08 21:54:19 | INFO | mpy_cli | 完成上传 [11/13]: D:/2026_SmartCar/PersonalCode/CarB/main.py -> :main.py
+2026-07-08 21:54:19 | INFO | mpy_cli | 开始上传 [12/13]: D:/2026_SmartCar/PersonalCode/CarB/test/WirelessCarsHeartbeatTest.py -> :test/WirelessCarsHeartbeatTest.py
+2026-07-08 21:54:20 | INFO | mpy_cli | 完成上传 [12/13]: D:/2026_SmartCar/PersonalCode/CarB/test/WirelessCarsHeartbeatTest.py -> :test/WirelessCarsHeartbeatTest.py
+2026-07-08 21:54:20 | INFO | mpy_cli | 开始上传 [13/13]: D:/2026_SmartCar/PersonalCode/CarB/test/__init__.py -> :test/__init__.py
+2026-07-08 21:54:20 | INFO | mpy_cli | 完成上传 [13/13]: D:/2026_SmartCar/PersonalCode/CarB/test/__init__.py -> :test/__init__.py
+2026-07-08 21:54:20 | INFO | mpy_cli | 部署完成: success=13 failure=0

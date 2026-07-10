@@ -1,3 +1,9 @@
+"""历史备份主程序：视觉追踪版。
+
+这个文件不是当前默认入口，但保留了较完整的“视觉追踪主循环”示例，
+适合拿来查初始化顺序和调参位置。
+"""
+
 from control import MotorControl
 # import IMUVertical
 # import PID
@@ -14,7 +20,7 @@ led = Pin('C4', Pin.OUT, value=True)
 switch2 = Pin('D9', Pin.IN, pull=Pin.PULL_UP_47K)
 state2 = switch2.value()
 
-# ===== Runtime switches: edit these at the top for one-click tuning =====
+# ===== 运行开关：最适合直接改的地方 =====
 ENABLE_STARTUP_PRINT = True
 ENABLE_TERMINAL_DEBUG = False
 ENABLE_WIRELESS_REPORT = False
@@ -51,12 +57,17 @@ GC_COLLECT_INTERVAL_MS = 1000
 
 
 def calc_box_error(box, center_x, center_y):
+    """根据目标框算出相对画面中心的原始误差。"""
     box_center_x = (box[0] + box[2]) / 2.0
     box_center_y = (box[1] + box[3]) / 2.0
     return center_x - box_center_x, center_y - box_center_y
 
 
 if __name__ == "__main__":
+    # 这是一个完整业务主程序示例：
+    # 1. 初始化视觉串口和无线串口
+    # 2. 创建颜色追踪控制器
+    # 3. 在主循环里不断 update
     # imu = IMUVertical.ImuSensorVertical()
     # imu.init()
     # imu.calibrate()

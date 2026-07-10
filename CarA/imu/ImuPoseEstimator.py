@@ -1,62 +1,68 @@
+"""基于竖装 IMU 的短时相对位姿估计。
+
+最常直接调用的入口：
+1. `pose = ImuPoseEstimator()`
+2. `pose.init()`
+3. `pose.calibrate()`
+4. `pose.reset_pose()`
+5. 主循环里不断 `pose.update()`
+"""
+
 import math
 import time
 
 from imu.IMUVertical import ImuSensorVertical
 
 
-# ===== Pose estimator config =====
-# These values are meant for short-range relative pose estimation only.
+# ===== 位姿估计配置 =====
+# 这些参数针对“短距离、短时间”的相对位姿估计，不适合长期积分定位。
 
-# Gravity constant used for converting g to m/s^2.
+# 用于把 g 转成 m/s^2 的重力常数。
 GRAVITY_MPS2 = 9.80665
 
-# Small plane acceleration is treated as noise and forced to zero.
+# 很小的平面加速度视为噪声，直接压成 0。
 PLANE_ACC_DEADBAND_G = 0.03
 
-# Small velocity is forced to zero to reduce low-speed drift.
+# 很小的速度也直接压成 0，减少积分漂移。
 VELOCITY_DEADBAND_MPS = 0.02
 
-# Stationary detection thresholds.
+# 静止判定阈值。
 STATIONARY_ACC_THRESHOLD_G = 0.05
 STATIONARY_GYRO_THRESHOLD_DPS = 2.0
 STATIONARY_HOLD_MS = 0
 
-# World-frame acceleration low-pass factor.
+# 世界坐标系加速度的一阶低通滤波系数。
 ACC_WORLD_ALPHA = 0.35
 
-# Stationary bias adaptation for horizontal plane acceleration.
+# 静止时，缓慢更新水平面加速度偏置。
 PLANE_BIAS_ALPHA = 0.08
 
-# Confidence update rates.
+# 可信度变化速率。
 CONFIDENCE_MIN = 0.05
 CONFIDENCE_MAX = 1.0
 CONFIDENCE_DECAY_PER_SEC = 0.08
 CONFIDENCE_RECOVER_PER_SEC = 0.25
 
-# Vertical-mount pose mapping.
-# The current car reports yaw decreasing from 0, so use -1 to flip yaw direction.
+# 竖装 IMU 下的位姿轴映射。
 YAW_SIGN = -1.0
 
-# Select which IMUVertical horizontal plane axis becomes pose x / pose y.
-# Current install:
-# x positive = left
-# y positive = down
-# z positive = backward
-# So the ground plane is x/z, and forward is -z.
+# 从 IMUVertical 的水平面坐标中，选哪一轴作为位姿 x / y。
 POSE_X_SOURCE = "z"
 POSE_X_SIGN = -1.0
 POSE_Y_SOURCE = "x"
 POSE_Y_SIGN = 1.0
 
-# Console print throttling for standalone test mode.
+# 独立测试模式下，控制打印频率，避免串口刷太快。
 TEST_PRINT_EVERY = 15
 
 
 def _clamp(value, lower, upper):
+    """内部工具函数：限制数值范围。"""
     return max(lower, min(upper, value))
 
 
 def _wrap_angle_deg(angle_deg):
+    """内部工具函数：把角度包裹到 [-180, 180]。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -65,6 +71,7 @@ def _wrap_angle_deg(angle_deg):
 
 
 def _select_axis_value(axis_x, axis_z, source, sign):
+    """内部工具函数：按配置选取 x 或 z 轴，并乘符号。"""
     if source == "x":
         value = axis_x
     elif source == "z":
@@ -75,6 +82,7 @@ def _select_axis_value(axis_x, axis_z, source, sign):
 
 
 class ImuPoseEstimator:
+    """短时间相对位姿估计器。"""
     def __init__(
         self,
         imu=None,
@@ -130,6 +138,7 @@ class ImuPoseEstimator:
         self._print_counter = 0
 
     def init(self):
+        """初始化内部 IMU。"""
         ok = self.imu.init()
         if ok:
             self._initialized = True
@@ -137,21 +146,25 @@ class ImuPoseEstimator:
         return ok
 
     def calibrate(self):
+        """校准内部 IMU，并同步重置位姿状态。"""
         ok = self.imu.calibrate()
         if ok:
             self.reset_pose()
         return ok
 
     def stop(self):
+        """停止内部 IMU 采样。"""
         self.imu.stop()
 
     def reset_pose(self, x=0.0, y=0.0, yaw=0.0):
+        """把当前位置重置成一个新的局部原点。"""
         self._x = float(x)
         self._y = float(y)
         self._vx = 0.0
         self._vy = 0.0
         self._ax_world = 0.0
         self._ay_world = 0.0
+        # 把当前 IMU 输出记录为新的局部零点，用于短距离相对运动估计。
         self._plane_bias_x_g = _select_axis_value(
             self.imu.acc_x, self.imu.acc_z, self.pose_x_source, self.pose_x_sign
         )
@@ -167,10 +180,12 @@ class ImuPoseEstimator:
         self._print_counter = 0
 
     def _current_yaw_deg(self):
+        """按当前配置换算出对外使用的航向角。"""
         yaw_delta = self.yaw_sign * (self.imu.yaw - self._yaw_origin_deg)
         return _wrap_angle_deg(yaw_delta + self._yaw_reset_deg)
 
     def _body_to_world(self, ax_body, ay_body, yaw_deg):
+        """把车体坐标系下的加速度旋转到世界坐标系。"""
         yaw_rad = math.radians(yaw_deg)
         cos_yaw = math.cos(yaw_rad)
         sin_yaw = math.sin(yaw_rad)
@@ -179,11 +194,13 @@ class ImuPoseEstimator:
         return ax_world, ay_world
 
     def _apply_deadband(self, value, threshold):
+        """把小于阈值的微小量直接视为 0。"""
         if abs(value) < threshold:
             return 0.0
         return value
 
     def _update_stationary_state(self, now_ms, plane_acc_mag_g, gyro_mag_dps):
+        """根据加速度和角速度判断当前是否处于静止状态。"""
         candidate_stationary = (
             plane_acc_mag_g <= self.stationary_acc_threshold_g
             and gyro_mag_dps <= self.stationary_gyro_threshold_dps
@@ -203,6 +220,7 @@ class ImuPoseEstimator:
         return self._stationary
 
     def _update_confidence(self, stationary, dt):
+        """更新位姿估计可信度。"""
         if stationary:
             self._confidence += self.confidence_recover_per_sec * dt
         else:
@@ -211,6 +229,7 @@ class ImuPoseEstimator:
         return self._confidence
 
     def update(self):
+        """位姿估计主更新入口。"""
         if not self._initialized:
             return None
 
@@ -240,6 +259,7 @@ class ImuPoseEstimator:
             + (imu_state["gyro_z"] * imu_state["gyro_z"])
         )
 
+        # 从竖装 IMU 的坐标系中挑出用于平面运动估计的两个轴。
         raw_pose_ax_body_g = _select_axis_value(
             acc_x_g, acc_z_g, self.pose_x_source, self.pose_x_sign
         )
@@ -257,6 +277,7 @@ class ImuPoseEstimator:
         stationary = self._update_stationary_state(now_ms, plane_acc_mag_g, gyro_mag_dps)
 
         if stationary:
+            # 小车静止时，把剩余平面加速度当作缓慢变化的偏置来修正。
             self._plane_bias_x_g += self.plane_bias_alpha * (raw_pose_ax_body_g - self._plane_bias_x_g)
             self._plane_bias_y_g += self.plane_bias_alpha * (raw_pose_ay_body_g - self._plane_bias_y_g)
             pose_ax_body_g = raw_pose_ax_body_g - self._plane_bias_x_g
@@ -265,12 +286,14 @@ class ImuPoseEstimator:
         pose_ax_body_g = self._apply_deadband(pose_ax_body_g, self.plane_acc_deadband_g)
         pose_ay_body_g = self._apply_deadband(pose_ay_body_g, self.plane_acc_deadband_g)
 
+        # 先把车体坐标系加速度旋转到世界坐标系，再做积分。
         lin_ax_world_g, lin_ay_world_g = self._body_to_world(pose_ax_body_g, pose_ay_body_g, yaw_deg)
 
         self._ax_world += self.acc_world_alpha * ((lin_ax_world_g * GRAVITY_MPS2) - self._ax_world)
         self._ay_world += self.acc_world_alpha * ((lin_ay_world_g * GRAVITY_MPS2) - self._ay_world)
 
         if stationary:
+            # 静止时主动把速度清零，是抑制积分漂移的关键手段。
             self._vx = 0.0
             self._vy = 0.0
         else:
@@ -282,6 +305,7 @@ class ImuPoseEstimator:
         self._x += self._vx * dt
         self._y += self._vy * dt
 
+        # 可信度是一个轻量健康度指标：运动时下降，静止时恢复。
         confidence = self._update_confidence(stationary, dt)
 
         return {
