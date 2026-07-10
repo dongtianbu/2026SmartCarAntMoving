@@ -16,7 +16,7 @@ TRACK_ERROR_PREFIX = "VISION_ERR"
 class WirelessUsart:
     """对 `seekfree.WIRELESS_UART` 的轻量封装。"""
 
-    def __init__(self, baudrate=460800):
+    def __init__(self, baudrate=115200):
         self._wuart = WIRELESS_UART(baudrate)
         self._baudrate = baudrate
         self._data_wave = [0.0] * 8
@@ -102,6 +102,6 @@ class WirelessUsart:
         WIRELESS_UART.help()
 
 
-def create_wireless_usart(baudrate=460800):
+def create_wireless_usart(baudrate=115200):
     """快速创建无线串口对象。"""
     return WirelessUsart(baudrate)

@@ -9,7 +9,7 @@ from seekfree import WIRELESS_UART
 
 class PIDYawUsart:
     """PID 偏航调试发送器。"""
-    def __init__(self, baudrate=460800):
+    def __init__(self, baudrate=115200):
         self._wuart = WIRELESS_UART(baudrate)
         self._wuart.info()
 
