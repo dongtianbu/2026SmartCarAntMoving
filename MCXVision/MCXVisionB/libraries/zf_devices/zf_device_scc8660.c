@@ -168,6 +168,18 @@ uint8 scc8660_init (void)
         }
         else
         {
+            // 初始化配置表写入成功后，再显式下发一次自动白平衡命令。
+            // 这里将 RGB 三个通道都设置为 0，表示切换到摄像头内部的自动白平衡模式，
+            // 避免后续工程改动或默认配置表差异导致白平衡未真正开启。
+            if(scc8660_set_white_balance(0, 0, 0))
+            {
+                zf_debug_printf("camera_awb_error\r\n");
+            }
+            else
+            {
+                zf_debug_printf("camera_awb_on\r\n");
+            }
+
             zf_debug_printf("camera_init_finish\r\n");
             break;
         }

@@ -1,76 +1,69 @@
 """颜色目标追踪控制器。
 
-本文件只处理视觉目标相对屏幕中心的位置误差，并输出底盘平移控制量。
-组合控制模式下，本文件不会单独覆盖 yaw 控制，而是把 vx/vy 交给上层统一混合。
+本模块只负责根据视觉目标状态计算平移控制量 vx、vy。
+在 CarB 的组合控制模式下，yaw 由上层独立闭环负责，
+这里不直接覆盖旋转控制，只输出平移控制量供上层混合。
 """
 
 import time
+
 import MotorControl
 from MCXVisionUsart import MCXVisionUsart
 
 
 # ---------------------------------------------------------------------------
 # 人工调参区
+# 所有需要现场人工调试的参数都集中放在文件顶部，便于统一修改。
 # ---------------------------------------------------------------------------
 
-# 默认基础占空比。当前版本主要保留给状态输出和兼容旧调用使用，不直接作为电机输出。
+# 基础占空比。主要用于兼容旧状态字段和调试输出，不直接参与平移闭环。
 COLOR_BASE_DUTY_DEFAULT = 6000
 
-# 颜色追踪允许的最大 PWM 占空比。数值越大，目标偏离中心时平移越猛。
-# 速度到占空比的基础换算在 MotorControl 中完成：
-#   duty = speed * (max_duty / 100)
-# 例如 max_duty=6500 时，speed=36 的理论占空比约为 36*65=2340。
-# 之后 MotorControl 还会按三轮混合结果做等比例缩放，独立颜色追踪模式下
-# `_bias_duty()` 会再把非零占空比抬到启动区间，避免电机因为占空比太低不动。
-# 如果目标在中心附近大幅来回抖动，优先降低这个值或下面的 COLOR_MAX_TRACKING_SPEED_DEFAULT。
+# 颜色追踪换算为电机占空比时允许的最大占空比。
 COLOR_MAX_TRACKING_DUTY_DEFAULT = 6500
 
-# 颜色追踪非零输出的最小 PWM 占空比。独立调用 update(m1,m2,m3) 时会用它抬高电机启动量。
-# 组合 yaw 跟随时主要使用 vx/vy，不直接使用这个占空比下限。
+# 颜色追踪单独直驱电机时的最小非零占空比，用于抬高电机起步量。
 COLOR_MIN_TRACKING_DUTY_DEFAULT = 5500
 
-# 丢失视觉帧后的短暂保持时间，单位 ms。数值过大可能导致目标丢失后还继续冲。
+# 丢帧后继续沿用上一帧有效目标的保持时间，单位 ms。
 COLOR_TARGET_HOLD_MS_DEFAULT = 100
 
-# X 方向比例系数。数值越大，目标左右偏离时横向修正越强；抖动大时降低。
+# 左右居中 PID 参数。
 COLOR_KP_X_DEFAULT = 1.2
-
-# X 方向微分系数。用于抑制变化过快的误差；过大也可能让输出变尖锐。
 COLOR_KD_X_DEFAULT = 0.08
 
-# Y 方向比例系数。数值越大，目标上下偏离时前后修正越强；抖动大时降低。
-COLOR_KP_Y_DEFAULT = 1.2
+# 横向修正输出方向系数。
+# 如果目标在画面右侧时小车反而向左修正，就把它设为 -1.0；
+# 如果目标在右侧时小车能正确向右修正，就设为 1.0。
+COLOR_X_OUTPUT_SIGN_DEFAULT = -1.0
 
-# Y 方向微分系数。用于抑制变化过快的误差；过大也可能让输出变尖锐。
+# 上下方向 PID 参数。用于让目标中点在屏幕竖直方向保持居中。
+COLOR_KP_Y_DEFAULT = 1.2
 COLOR_KD_Y_DEFAULT = 0.08
 
-# 进入中心区阈值，单位像素。目标误差小于该值时认为已经居中并停止平移修正。
-COLOR_CENTER_ENTER_ZONE_DEFAULT = 12
+# 前后修正输出方向系数。
+# 如果目标偏上/偏下时，小车前后修正方向相反，
+# 就把它设为 -1.0；方向正确则设为 1.0。
+COLOR_Y_OUTPUT_SIGN_DEFAULT = -1.0
 
-# 离开中心区阈值，单位像素。必须大于进入阈值，用迟滞避免目标在边界附近反复启停。
+# 进入/退出居中区域的阈值，单位像素。
+COLOR_CENTER_ENTER_ZONE_DEFAULT = 12
 COLOR_CENTER_EXIT_ZONE_DEFAULT = 22
 
-# 视觉目标中心点一阶滤波系数，范围 0.05~1.0。越小越稳但越慢，越大响应越快。
+# 视觉输入和速度指令的一阶滤波系数。
 COLOR_INPUT_FILTER_ALPHA_DEFAULT = 0.25
-
-# 平移速度指令一阶滤波系数，范围 0.05~1.0。越小电机输出越柔和，越大响应越快。
 COLOR_COMMAND_FILTER_ALPHA_DEFAULT = 0.18
 
-# 颜色追踪平移速度最大值，单位是 MotorControl 的 speed 标度 0~100。
-# 这个值不是占空比，而是先作为底盘 vx/vy 速度参与三轮解算。
-# 在默认 max_duty=6500 时，单个轮子的理论占空比约为 speed*65；
-# 例如 speed=30 约等于 1950 duty，speed=40 约等于 2600 duty。
-# 这是抑制大幅抖动最直接的限幅；若追踪太慢再逐步增加。
+# 平移速度最大值，使用 MotorControl 的 speed 标度 0~100。
 COLOR_MAX_TRACKING_SPEED_DEFAULT = 36.0
 
-# 平移速度每次 update 最大变化量。它限制的是 speed 变化量，不是 duty 变化量。
-# 在 max_duty=6500 时，每增加 1 speed 理论上约增加 65 duty；
-# 当前 1.5 speed 约等于每次最多变化 98 duty，实际还会受三轮混合影响。
-# 数值越小加减速越柔和，但太小会追不上快速目标。
+# 每次更新允许的最大速度变化量，用于限制突变。
 COLOR_COMMAND_RAMP_STEP_DEFAULT = 1.5
 
 
 class PID:
+    """简单 PID 控制器。"""
+
     def __init__(self, kp=0, ki=0, kd=0, output_min=-100, output_max=100, integral_limit=None):
         self.kp = kp
         self.ki = ki
@@ -78,7 +71,6 @@ class PID:
         self.output_min = output_min
         self.output_max = output_max
         self.integral_limit = integral_limit
-
         self.integral = 0
         self.last_error = 0
 
@@ -88,7 +80,6 @@ class PID:
 
     def compute(self, target, current):
         error = target - current
-
         p_out = self.kp * error
 
         self.integral += error
@@ -100,11 +91,12 @@ class PID:
         self.last_error = error
 
         output = p_out + i_out + d_out
-        output = max(self.output_min, min(self.output_max, output))
-        return output
+        return max(self.output_min, min(self.output_max, output))
 
 
 class ColorTraceController:
+    """根据视觉目标状态生成平移控制命令。"""
+
     SCREEN_W = 160
     SCREEN_H = 120
     CENTER_X = SCREEN_W // 2
@@ -119,8 +111,10 @@ class ColorTraceController:
         target_hold_ms=COLOR_TARGET_HOLD_MS_DEFAULT,
         kp_x=COLOR_KP_X_DEFAULT,
         kd_x=COLOR_KD_X_DEFAULT,
+        x_output_sign=COLOR_X_OUTPUT_SIGN_DEFAULT,
         kp_y=COLOR_KP_Y_DEFAULT,
         kd_y=COLOR_KD_Y_DEFAULT,
+        y_output_sign=COLOR_Y_OUTPUT_SIGN_DEFAULT,
         dead_zone=COLOR_CENTER_ENTER_ZONE_DEFAULT,
         center_exit_zone=COLOR_CENTER_EXIT_ZONE_DEFAULT,
         input_filter_alpha=COLOR_INPUT_FILTER_ALPHA_DEFAULT,
@@ -137,6 +131,8 @@ class ColorTraceController:
         self.base_duty = base_duty
         self.dead_zone = max(0, int(dead_zone))
         self.center_exit_zone = max(self.dead_zone, int(center_exit_zone))
+        self.x_output_sign = -1.0 if float(x_output_sign) < 0 else 1.0
+        self.y_output_sign = -1.0 if float(y_output_sign) < 0 else 1.0
         self.input_filter_alpha = min(1.0, max(0.05, float(input_filter_alpha)))
         self.command_filter_alpha = min(1.0, max(0.05, float(command_filter_alpha)))
         self.command_ramp_step = max(0.0, float(command_ramp_step))
@@ -165,11 +161,15 @@ class ColorTraceController:
         )
 
         self.running = False
+        self._clear_runtime_state()
+
+    def _clear_runtime_state(self):
+        """清空运行时状态。"""
         self.last_frame = None
         self.last_frame_ms = None
         self.last_frame_idx = None
-        self.correction_x = 0
-        self.correction_y = 0
+        self.correction_x = 0.0
+        self.correction_y = 0.0
         self.moving = False
         self.last_raw_duty = (0, 0, 0)
         self.last_duty = (0, 0, 0)
@@ -180,45 +180,19 @@ class ColorTraceController:
         self.command_vx = 0.0
         self.command_vy = 0.0
         self.centered = False
+        self.box_width = 0
+        self.box_height = 0
 
     def start(self):
         self.x_pid.reset()
         self.y_pid.reset()
         self.buf = bytearray()
         self.running = True
-        self.last_frame = None
-        self.last_frame_ms = None
-        self.last_frame_idx = None
-        self.correction_x = 0
-        self.correction_y = 0
-        self.moving = False
-        self.last_raw_duty = (0, 0, 0)
-        self.last_duty = (0, 0, 0)
-        self.filtered_cx = None
-        self.filtered_cy = None
-        self.filtered_vx = 0.0
-        self.filtered_vy = 0.0
-        self.command_vx = 0.0
-        self.command_vy = 0.0
-        self.centered = False
+        self._clear_runtime_state()
 
     def stop(self):
         self.running = False
-        self.last_frame = None
-        self.last_frame_ms = None
-        self.last_frame_idx = None
-        self.correction_x = 0
-        self.correction_y = 0
-        self.moving = False
-        self.last_raw_duty = (0, 0, 0)
-        self.last_duty = (0, 0, 0)
-        self.filtered_cx = None
-        self.filtered_cy = None
-        self.filtered_vx = 0.0
-        self.filtered_vy = 0.0
-        self.command_vx = 0.0
-        self.command_vy = 0.0
-        self.centered = False
+        self._clear_runtime_state()
 
     def _apply_duty(self, motor_1, motor_2, motor_3, duty):
         d1, d2, d3 = duty
@@ -247,6 +221,7 @@ class ColorTraceController:
         return duty_sign * min(self.max_tracking_duty, biased_mag)
 
     def _recv_frames(self):
+        """从视觉串口接收并解析尽可能多的完整帧。"""
         frames = []
 
         while self.mcx.available() > 0:
@@ -255,7 +230,6 @@ class ColorTraceController:
                 self.buf.extend(raw)
 
         frame_size = getattr(self.mcx, "FRAME_SIZE", 11)
-
         while len(self.buf) >= frame_size:
             frame = MCXVisionUsart.parse_frame(bytes(self.buf[:frame_size]))
             if frame is not None:
@@ -267,9 +241,9 @@ class ColorTraceController:
         return frames
 
     def _reset_motion_command(self):
-        """清空平移控制量，避免进入中心或丢目标后旧速度继续残留。"""
-        self.correction_x = 0
-        self.correction_y = 0
+        """在达到目标或丢失目标后，清空平移控制状态。"""
+        self.correction_x = 0.0
+        self.correction_y = 0.0
         self.filtered_vx = 0.0
         self.filtered_vy = 0.0
         self.command_vx = 0.0
@@ -281,7 +255,7 @@ class ColorTraceController:
         self.y_pid.reset()
 
     def _filter_center(self, cx, cy):
-        """对视觉中心点做一阶滤波，减少识别框跳动直接传到电机。"""
+        """对目标中心点做滤波，减小相邻帧抖动。"""
         if self.filtered_cx is None or self.filtered_cy is None:
             self.filtered_cx = cx
             self.filtered_cy = cy
@@ -291,8 +265,8 @@ class ColorTraceController:
             self.filtered_cy += alpha * (cy - self.filtered_cy)
         return self.filtered_cx, self.filtered_cy
 
-    def _is_in_center(self, err_x, err_y):
-        """带迟滞判断目标是否在中心区，避免中心边界附近反复启停。"""
+    def _is_xy_in_center(self, err_x, err_y):
+        """按 x/y 同时判断目标中点是否已经进入居中区域。"""
         if self.centered:
             if abs(err_x) > self.center_exit_zone or abs(err_y) > self.center_exit_zone:
                 self.centered = False
@@ -301,14 +275,14 @@ class ColorTraceController:
         return self.centered
 
     def _filter_command(self, vx, vy):
-        """对平移速度做一阶滤波，让追踪动作更柔和。"""
+        """对平移指令做滤波。"""
         alpha = self.command_filter_alpha
         self.filtered_vx += alpha * (vx - self.filtered_vx)
         self.filtered_vy += alpha * (vy - self.filtered_vy)
         return self.filtered_vx, self.filtered_vy
 
     def _step_towards(self, current, target):
-        """按固定步长逼近目标速度，限制每次循环的速度突变。"""
+        """限制每次更新的速度跳变量。"""
         step = self.command_ramp_step
         if step <= 0:
             return target
@@ -319,31 +293,43 @@ class ColorTraceController:
         return current
 
     def _ramp_command(self, vx, vy):
-        """分别限制 vx/vy 的变化率，降低中心附近大幅来回摆动。"""
+        """分别对 vx、vy 做斜坡限制。"""
         self.command_vx = self._step_towards(self.command_vx, vx)
         self.command_vy = self._step_towards(self.command_vy, vy)
         return self.command_vx, self.command_vy
 
     def _frame_to_state(self, frame):
+        """把视觉帧转换为控制层状态。"""
         cx, cy = self._filter_center(frame["center_x"], frame["center_y"])
         err_x = self.CENTER_X - cx
         err_y = self.CENTER_Y - cy
         box = (frame["x1"], frame["y1"], frame["x2"], frame["y2"])
-        in_center = self._is_in_center(err_x, err_y)
-        return cx, cy, err_x, err_y, box, in_center
+        box_width = frame.get("width", 0)
+        box_height = frame.get("height", 0)
+        in_center = self._is_xy_in_center(err_x, err_y)
+
+        return {
+            "cx": cx,
+            "cy": cy,
+            "err_x": err_x,
+            "err_y": err_y,
+            "box": box,
+            "box_width": box_width,
+            "box_height": box_height,
+            "in_center": in_center,
+        }
 
     def _target_is_recent(self, now_ms):
         if self.last_frame is None or self.last_frame_ms is None:
             return False
         return time.ticks_diff(now_ms, self.last_frame_ms) <= self.target_hold_ms
 
-    def update_tracking_command(self):
-        """只计算颜色追踪控制量，不直接驱动电机。
+    def _load_frame_state(self, frame_state):
+        self.box_width = frame_state["box_width"]
+        self.box_height = frame_state["box_height"]
 
-        组合控制需要把颜色追踪的平移速度和 yaw PID 的旋转速度混合后，
-        再统一写入三个电机。这里单独提供计算接口，避免两个控制器先后写
-        电机导致输出互相覆盖。
-        """
+    def update_tracking_command(self):
+        """只计算平移控制量，不直接写入电机。"""
         if not self.running:
             return None
 
@@ -354,9 +340,11 @@ class ColorTraceController:
         target_locked = False
         cx = self.CENTER_X
         cy = self.CENTER_Y
-        err_x = 0
-        err_y = 0
+        err_x = 0.0
+        err_y = 0.0
         box = (0, 0, 0, 0)
+        box_width = 0
+        box_height = 0
         in_center = False
 
         if frames:
@@ -369,16 +357,24 @@ class ColorTraceController:
                 has_target_now = True
                 target_locked = True
 
-                cx, cy, err_x, err_y, box, in_center = self._frame_to_state(frame)
+                frame_state = self._frame_to_state(frame)
+                cx = frame_state["cx"]
+                cy = frame_state["cy"]
+                err_x = frame_state["err_x"]
+                err_y = frame_state["err_y"]
+                box = frame_state["box"]
+                box_width = frame_state["box_width"]
+                box_height = frame_state["box_height"]
+                in_center = frame_state["in_center"]
+                self._load_frame_state(frame_state)
 
                 if not in_center:
-                    self.correction_x = self.x_pid.compute(0, err_x)
+                    self.correction_x = self.x_pid.compute(0, err_x) * self.x_output_sign
                     self.correction_y = self.y_pid.compute(0, err_y)
                     self.moving = True
                 else:
                     self._reset_motion_command()
             else:
-                # 明确收到无目标帧时，立即清空控制量。
                 self.last_frame = None
                 self.last_frame_ms = None
                 self.filtered_cx = None
@@ -386,9 +382,17 @@ class ColorTraceController:
                 self.centered = False
                 self._reset_motion_command()
         elif self._target_is_recent(now_ms):
-            # 只允许短时间丢包复用上一帧有效目标。
             target_locked = True
-            cx, cy, err_x, err_y, box, in_center = self._frame_to_state(self.last_frame)
+            frame_state = self._frame_to_state(self.last_frame)
+            cx = frame_state["cx"]
+            cy = frame_state["cy"]
+            err_x = frame_state["err_x"]
+            err_y = frame_state["err_y"]
+            box = frame_state["box"]
+            box_width = frame_state["box_width"]
+            box_height = frame_state["box_height"]
+            in_center = frame_state["in_center"]
+            self._load_frame_state(frame_state)
             if in_center:
                 self._reset_motion_command()
         else:
@@ -398,15 +402,19 @@ class ColorTraceController:
             self.filtered_cx = None
             self.filtered_cy = None
             self.centered = False
+            self.box_width = 0
+            self.box_height = 0
             self._reset_motion_command()
 
-        vx = 0
-        vy = 0
+        vx = 0.0
+        vy = 0.0
 
         if self.moving and target_locked and not in_center and has_target_now:
+            vy_target = -self.correction_y * self.y_output_sign
+
             filtered_vx, filtered_vy = self._filter_command(
                 self.correction_x,
-                -self.correction_y,
+                vy_target,
             )
             vx, vy = self._ramp_command(filtered_vx, filtered_vy)
             raw_duty = MotorControl.vector_to_duty(
@@ -438,15 +446,19 @@ class ColorTraceController:
             "cy": cy,
             "err_x": err_x,
             "err_y": err_y,
+            "box": box,
+            "box_width": box_width,
+            "box_height": box_height,
             "correction_x": self.correction_x,
             "correction_y": self.correction_y,
+            "x_output_sign": self.x_output_sign,
+            "y_output_sign": self.y_output_sign,
             "base_duty": self.base_duty,
             "max_tracking_duty": self.max_tracking_duty,
             "min_tracking_duty": self.min_tracking_duty,
             "target_hold_ms": self.target_hold_ms,
             "moving": self.moving,
             "in_center": target_locked and in_center,
-            "box": box,
             "vx": vx,
             "vy": vy,
             "raw_duty": raw_duty,
@@ -454,6 +466,7 @@ class ColorTraceController:
         }
 
     def update(self, motor_1, motor_2, motor_3):
+        """兼容独立颜色追踪模式，直接把输出写到电机。"""
         state = self.update_tracking_command()
         if state is None:
             return None

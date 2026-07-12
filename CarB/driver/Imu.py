@@ -164,11 +164,9 @@ class ImuSensor:
         self._roll = self._comp_alpha * (self._roll + gx * dt) + (1.0 - self._comp_alpha) * roll_acc
         self._pitch = self._comp_alpha * (self._pitch + gy * dt) + (1.0 - self._comp_alpha) * pitch_acc
 
+        # yaw 使用连续积分角度，不再限制到 [-180, 180]。
+        # 因此正向转过 180 度后会继续变成 190、200...，负向同理会继续变成 -190、-200...。
         self._yaw += gz * dt
-        if self._yaw > 180.0:
-            self._yaw -= 360.0
-        elif self._yaw < -180.0:
-            self._yaw += 360.0
 
         return {
             "acc_x": self._ax_f, "acc_y": self._ay_f, "acc_z": self._az_f,

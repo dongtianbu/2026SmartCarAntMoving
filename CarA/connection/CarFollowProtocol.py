@@ -9,7 +9,7 @@ STATE_ID_LEADER_YAW = 0x31
 
 
 def wrap_angle_deg(angle_deg):
-    """把角度限制到 [-180, 180] 范围。"""
+    """旧版角度折返工具，仅保留给需要等效朝向判断的代码使用。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -17,9 +17,9 @@ def wrap_angle_deg(angle_deg):
     return angle_deg
 
 
-def shortest_angle_error(target_deg, current_deg):
-    """返回从 current 转到 target 的最短有符号角度误差。"""
-    return wrap_angle_deg(target_deg - current_deg)
+def continuous_angle_error(target_deg, current_deg):
+    """返回连续 yaw 误差，不做 180/-180 折返。"""
+    return target_deg - current_deg
 
 
 class LeaderYawSender:
@@ -59,9 +59,10 @@ class LeaderYawSender:
         if not self.should_send(now_ms):
             return False
         # 第一阶段链路测试使用可读 ASCII 文本，而不是二进制协议帧。
-        # 串口助手应直接看到类似 "YAW:-12.34" 的文本行。
+        # 串口助手应直接看到类似 "YAW:190.00" 或 "YAW:-200.00" 的连续角度文本行。
         # CarB/control/LeaderYawReceiveTest.py 和 FollowLeaderYawPID.py
         # 都解析同一种格式；如果这里改格式，从车接收端也必须同步修改。
-        self.radio.send_line("YAW:{:.2f}".format(wrap_angle_deg(float(yaw_deg))))
+        # 注意：这里不能再 wrap 到 [-180, 180]，否则主车转到 190 度会被发送成 -170 度。
+        self.radio.send_line("YAW:{:.2f}".format(float(yaw_deg)))
         self._last_send_ms = now_ms
         return True

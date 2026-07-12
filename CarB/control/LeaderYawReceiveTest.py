@@ -64,6 +64,7 @@ def build_config(**overrides):
 
 
 def wrap_angle_deg(angle_deg):
+    """旧版角度折返工具，仅保留给需要等效朝向判断的代码使用。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -149,10 +150,11 @@ class LeaderYawReceiver:
 
     def _parse_yaw_line(self, line):
         # 主车发送 "YAW:<angle>" 纯文本，串口助手和从车程序看到的是同一份可读数据。
+        # angle 是连续 yaw，不再限制到 [-180, 180]；例如 190 度会保持为 190。
         if not line.startswith("YAW:"):
             return None
         try:
-            return wrap_angle_deg(float(line[4:]))
+            return float(line[4:])
         except Exception:
             self.parse_error_count += 1
             return None

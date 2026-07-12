@@ -62,7 +62,7 @@ def _clamp(value, lower, upper):
 
 
 def _wrap_angle_deg(angle_deg):
-    """内部工具函数：把角度包裹到 [-180, 180]。"""
+    """旧版角度折返工具，仅保留给需要等效朝向判断的代码使用。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -180,9 +180,10 @@ class ImuPoseEstimator:
         self._print_counter = 0
 
     def _current_yaw_deg(self):
-        """按当前配置换算出对外使用的航向角。"""
+        """按当前配置换算出对外使用的连续航向角。"""
         yaw_delta = self.yaw_sign * (self.imu.yaw - self._yaw_origin_deg)
-        return _wrap_angle_deg(yaw_delta + self._yaw_reset_deg)
+        # yaw 保持连续角度，不再折返到 [-180, 180]。
+        return yaw_delta + self._yaw_reset_deg
 
     def _body_to_world(self, ax_body, ay_body, yaw_deg):
         """把车体坐标系下的加速度旋转到世界坐标系。"""

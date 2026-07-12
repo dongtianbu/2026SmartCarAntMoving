@@ -3,7 +3,7 @@
 本模块是在无线 yaw 接收测试之后的下一步：
 - 主车 CarA 发送可读 ASCII 文本行："YAW:<deg>\\r\\n"。
 - 从车 CarB 接收最新主车 yaw，同时读取自己的 IMU yaw。
-- PID 根据两车 yaw 的最短角度误差输出原地旋转速度，直到两车 yaw 一致。
+- PID 根据两车连续 yaw 误差输出原地旋转速度，直到两车 yaw 一致。
 
 安全说明：
 - 第一次调参时建议把车轮架空。
@@ -48,7 +48,7 @@ IMU_GYRO_CALI_N = 300
 IMU_CALIBRATE_ON_START = True
 IMU_CALIBRATION_SETTLE_MS = 500
 
-# PID 参数。误差是“从车 yaw 到主车 yaw”的最短有符号角度，单位是度。
+# PID 参数。误差是“主车连续 yaw - 从车连续 yaw”，单位是度，不再做 180/-180 折返。
 # 控制输出会传给 MotorControl.rotate(speed)。
 # 现有 MotorControl 中 speed=58 大约对应 5800 duty，speed=85 大约对应 8500 duty。
 # 因此只要误差超过死区，非零输出会被抬到 MIN_COMMAND_SPEED，避免低占空比电机不动。
@@ -74,6 +74,11 @@ LED_ACTIVE_LEVEL = 0
 STOP_SWITCH_PIN = "D9"
 STOP_SWITCH_PULL = Pin.PULL_UP_47K
 STOP_SWITCH_ENABLED = False
+
+START_KEY_PIN = "C8"
+START_KEY_PULL = Pin.PULL_UP_47K
+START_KEY_ACTIVE_LEVEL = 0
+START_KEY_DEBOUNCE_MS = 30
 
 # 可选电机链路自检。正常运行时建议保持 False。
 # 如果改成 True，从车会在 IMU 校准后短暂原地旋转，然后再进入 yaw 跟随。
@@ -116,6 +121,10 @@ DEFAULT_CONFIG = {
     "stop_switch_pin": STOP_SWITCH_PIN,
     "stop_switch_pull": STOP_SWITCH_PULL,
     "stop_switch_enabled": STOP_SWITCH_ENABLED,
+    "start_key_pin": START_KEY_PIN,
+    "start_key_pull": START_KEY_PULL,
+    "start_key_active_level": START_KEY_ACTIVE_LEVEL,
+    "start_key_debounce_ms": START_KEY_DEBOUNCE_MS,
     "motor_self_test_on_start": MOTOR_SELF_TEST_ON_START,
     "motor_self_test_speed": MOTOR_SELF_TEST_SPEED,
     "motor_self_test_ms": MOTOR_SELF_TEST_MS,
@@ -144,7 +153,7 @@ def clamp(value, lower, upper):
 
 
 def wrap_angle_deg(angle_deg):
-    """把角度限制到 [-180, 180] 范围。"""
+    """旧版角度折返工具，仅保留给需要等效朝向判断的代码使用。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -152,9 +161,39 @@ def wrap_angle_deg(angle_deg):
     return angle_deg
 
 
+def continuous_yaw_error(target_deg, current_deg):
+    """返回连续 yaw 误差，不做 180/-180 折返。"""
+    return target_deg - current_deg
+
+
 def shortest_angle_error(target_deg, current_deg):
-    """返回从 current yaw 转到 target yaw 的最短有符号角度误差。"""
-    return wrap_angle_deg(target_deg - current_deg)
+    """兼容旧调用名：当前系统使用连续 yaw 误差，不再做最短角度折返。"""
+    return continuous_yaw_error(target_deg, current_deg)
+
+
+def _is_start_key_pressed(start_key, config):
+    return start_key.value() == config["start_key_active_level"]
+
+
+def _wait_start_key(start_key, config):
+    if config["enable_serial_log"]:
+        print("从车 IMU 校准完成，等待按下 {} 后启动 yaw 跟随。".format(
+            config["start_key_pin"],
+        ))
+
+    while True:
+        MotorControl.stop(0)
+        if _is_start_key_pressed(start_key, config):
+            time.sleep_ms(config["start_key_debounce_ms"])
+            if _is_start_key_pressed(start_key, config):
+                if config["enable_serial_log"]:
+                    print("{} 已按下，从车开始 yaw 跟随。".format(
+                        config["start_key_pin"],
+                    ))
+                return
+
+        time.sleep_ms(config["loop_delay_ms"])
+        gc.collect()
 
 
 class YawPID:
@@ -227,6 +266,11 @@ class FollowLeaderYawPID:
     def start(self):
         MotorControl.stop(0)
         self.receiver.start()
+        start_key = Pin(
+            self.config["start_key_pin"],
+            Pin.IN,
+            pull=self.config["start_key_pull"],
+        )
         print("从车 IMU 初始化中...")
         self.imu.init()
         if self.config["imu_calibrate_on_start"]:
@@ -236,6 +280,7 @@ class FollowLeaderYawPID:
             print("从车陀螺仪校准完成，开始等待主车 yaw。")
         else:
             print("从车跳过陀螺仪校准，直接等待主车 yaw。")
+        _wait_start_key(start_key, self.config)
         self.pid.reset()
         self.last_loop_ms = time.ticks_ms()
         self.running = True
@@ -262,7 +307,7 @@ class FollowLeaderYawPID:
         dt_s = time.ticks_diff(now_ms, self.last_loop_ms) / 1000.0
         self.last_loop_ms = now_ms
 
-        if self.leader_yaw is None or self.receiver.is_timeout(now_ms):
+        if self.leader_yaw is None:
             self.pid.reset()
             MotorControl.stop(0)
             return {
@@ -275,7 +320,7 @@ class FollowLeaderYawPID:
             }
 
         follower_yaw = imu_data["yaw"]
-        yaw_error = shortest_angle_error(self.leader_yaw, follower_yaw)
+        yaw_error = continuous_yaw_error(self.leader_yaw, follower_yaw)
 
         if abs(yaw_error) <= self.config["yaw_deadband_deg"]:
             self.pid.reset()

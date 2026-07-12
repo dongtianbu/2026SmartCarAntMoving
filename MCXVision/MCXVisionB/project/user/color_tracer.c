@@ -1,62 +1,79 @@
 #include "color_tracer.h"
 
-#define SWAPBYTE(h)                 ((((uint16_t)(h) << 8) & 0xFF00u) | ((uint16_t)(h) >> 8))
-#define COLOR_SAMPLE_RADIUS         4
-#define COLOR_CELL_MATCH_COUNT      3
-#define COLOR_TRACK_KEEP_FRAMES     2
+#define SWAPBYTE(h)                         ((((uint16_t)(h) << 8) & 0xFF00u) | ((uint16_t)(h) >> 8))
 
-#define COLOR_DEFAULT_WIDTH_MIN     14u
-#define COLOR_DEFAULT_HEIGHT_MIN    14u
-#define COLOR_DEFAULT_AREA_MIN      120u
-#define COLOR_DEFAULT_ASPECT_MIN    45u
-#define COLOR_DEFAULT_ASPECT_MAX    240u
-#define COLOR_DEFAULT_FILL_MIN      28u
+// ==================== 可调试参数区 ====================
+// 单个像素被视为亮点的最小强度阈值，值越大越能压制弱杂点。
+#define LIGHT_PIXEL_THRESHOLD              168u
+// 一个网格内至少有多少个亮像素，才认为该网格有效。
+#define LIGHT_CELL_PIXEL_MIN               1u
+// 对候选连通域向外扩展的像素数，避免细小亮点被截断。
+#define LIGHT_COMPONENT_EXPAND_PIXELS      2u
+
+// 单个亮点的最小宽度，单位像素。
+#define LIGHT_POINT_MIN_WIDTH              2u
+// 单个亮点的最小高度，单位像素。
+#define LIGHT_POINT_MIN_HEIGHT             2u
+// 单个亮点的最大宽度，单位像素。
+#define LIGHT_POINT_MAX_WIDTH              24u
+// 单个亮点的最大高度，单位像素。
+#define LIGHT_POINT_MAX_HEIGHT             24u
+// 单个亮点的最小亮像素数。
+#define LIGHT_POINT_MIN_PIXELS             2u
+// 单个亮点的最大亮像素数。
+#define LIGHT_POINT_MAX_PIXELS             180u
+// 亮点框内部填充率下限，按 100 倍存储。
+#define LIGHT_POINT_MIN_FILL_X100          8u
+// 亮点宽高比下限，按 100 倍存储。
+#define LIGHT_POINT_MIN_ASPECT_X100        25u
+// 亮点宽高比上限，按 100 倍存储。
+#define LIGHT_POINT_MAX_ASPECT_X100        400u
+// 单个亮点峰值强度下限，避免把很暗的杂点也选进来。
+#define LIGHT_POINT_MIN_PEAK_VALUE         180u
+// 单个亮点总强度下限，避免只有一两个偶然噪点通过。
+#define LIGHT_POINT_MIN_SUM_VALUE          360u
+
+// 峰值强度在评分中的权重。
+#define LIGHT_SCORE_PEAK_WEIGHT            10u
+// 亮像素数量在评分中的权重。
+#define LIGHT_SCORE_PIXEL_WEIGHT           6u
+// 总强度在评分中的缩放因子，值越小则总强度影响越大。
+#define LIGHT_SCORE_SUM_DIV                4u
+
+// 当前帧未检出时，保留上一帧结果的帧数。
+#define LIGHT_TRACK_KEEP_FRAMES            1u
+// ==================== 可调试参数区 ====================
 
 typedef struct
 {
-    uint16 min_x;
-    uint16 max_x;
-    uint16 min_y;
-    uint16 max_y;
-    uint16 cells;
+    uint16                  min_x;
+    uint16                  max_x;
+    uint16                  min_y;
+    uint16                  max_y;
+    uint16                  cells;
+    uint8                   peak_value;
 } component_info_t;
 
-target_condi_struct target_color_condi = {0};
-result_struct target_pos_out = {0};
+typedef struct
+{
+    uint8                   red;
+    uint8                   green;
+    uint8                   blue;
+} color_rgb_struct;
 
-static uint8 s_grid_mask[COLOR_GRID_H][COLOR_GRID_W] = {{0}};
-static uint8 s_grid_visit[COLOR_GRID_H][COLOR_GRID_W] = {{0}};
-static uint16 s_queue[COLOR_GRID_W * COLOR_GRID_H] = {0};
-static result_struct s_last_result = {0};
-static uint8 s_last_result_valid = 0u;
+light_trace_result_struct light_trace_out = {0};
+
+static uint8 s_grid_mask[LIGHT_GRID_H][LIGHT_GRID_W] = {{0}};
+static uint8 s_grid_visit[LIGHT_GRID_H][LIGHT_GRID_W] = {{0}};
+static uint8 s_grid_peak[LIGHT_GRID_H][LIGHT_GRID_W] = {{0}};
+static uint16 s_queue[LIGHT_GRID_W * LIGHT_GRID_H] = {0};
+static light_trace_result_struct s_last_trace_out = {0};
+static uint8 s_last_trace_valid = 0u;
 static uint8 s_lost_frames = 0u;
 
 static unsigned int umin(unsigned int a, unsigned int b)
 {
     return (a < b) ? a : b;
-}
-
-static unsigned int umax(unsigned int a, unsigned int b)
-{
-    return (a > b) ? a : b;
-}
-
-static unsigned int clampu(unsigned int value, unsigned int low, unsigned int high)
-{
-    if(value < low)
-    {
-        return low;
-    }
-    if(value > high)
-    {
-        return high;
-    }
-    return value;
-}
-
-static unsigned int sat_sub(unsigned int value, unsigned int delta)
-{
-    return (value > delta) ? (value - delta) : 0u;
 }
 
 static int absi(int value)
@@ -67,267 +84,312 @@ static int absi(int value)
 static void readcolor(unsigned int x, unsigned int y, color_rgb_struct *rgb)
 {
     uint16 c16;
+
     c16 = SWAPBYTE(*((uint16 *)g_camera_buffer + y * SCC8660_W + x));
-    rgb->red   = (unsigned char)((c16 & 0xF800u) >> 8);
-    rgb->green = (unsigned char)((c16 & 0x07E0u) >> 3);
-    rgb->blue  = (unsigned char)((c16 & 0x001Fu) << 3);
+    rgb->red   = (uint8)((c16 & 0xF800u) >> 8);
+    rgb->green = (uint8)((c16 & 0x07E0u) >> 3);
+    rgb->blue  = (uint8)((c16 & 0x001Fu) << 3);
 }
 
-static void rgbtohsl(const color_rgb_struct *rgb, color_hsl_struct *hsl)
-{
-    int h = 0;
-    int s = 0;
-    int l;
-    int maxval;
-    int minval;
-    int difval;
-    int r = rgb->red;
-    int g = rgb->green;
-    int b = rgb->blue;
-
-    maxval = r;
-    if(g > maxval) maxval = g;
-    if(b > maxval) maxval = b;
-
-    minval = r;
-    if(g < minval) minval = g;
-    if(b < minval) minval = b;
-
-    difval = maxval - minval;
-    l = (maxval + minval) * 240 / 255 / 2;
-
-    if(difval != 0)
-    {
-        if(maxval == r)
-        {
-            h = (g >= b) ? (40 * (g - b) / difval) : (40 * (g - b) / difval + 240);
-        }
-        else if(maxval == g)
-        {
-            h = 40 * (b - r) / difval + 80;
-        }
-        else
-        {
-            h = 40 * (r - g) / difval + 160;
-        }
-
-        if(l <= 120)
-        {
-            s = (maxval + minval == 0) ? 0 : (difval * 240 / (maxval + minval));
-        }
-        else
-        {
-            s = (480 - (maxval + minval) == 0) ? 0 : (difval * 240 / (480 - (maxval + minval)));
-        }
-    }
-
-    if(h < 0) h = 0;
-    if(h > 240) h = 240;
-    if(s < 0) s = 0;
-    if(s > 240) s = 240;
-    if(l < 0) l = 0;
-    if(l > 240) l = 240;
-
-    hsl->hue = (unsigned char)h;
-    hsl->saturation = (unsigned char)s;
-    hsl->luminance = (unsigned char)l;
-}
-
-static int hue_in_range(uint8 hue, const target_condi_struct *condition)
-{
-    if(condition->hue_wrap)
-    {
-        return (hue >= condition->h_min) || (hue <= condition->h_max);
-    }
-    return (hue >= condition->h_min) && (hue <= condition->h_max);
-}
-
-static int hue_delta(uint8 hue, uint8 ref)
-{
-    int delta = (int)hue - (int)ref;
-
-    while(delta > 120)
-    {
-        delta -= 240;
-    }
-    while(delta < -120)
-    {
-        delta += 240;
-    }
-
-    return delta;
-}
-
-static uint8 wrap_hue(int hue)
-{
-    while(hue < 0)
-    {
-        hue += 240;
-    }
-    while(hue > 240)
-    {
-        hue -= 240;
-    }
-    return (uint8)hue;
-}
-
-static int pixel_match_hsl(const color_hsl_struct *hsl, const target_condi_struct *condition)
-{
-    if(!condition->valid)
-    {
-        return 0;
-    }
-
-    if(!hue_in_range(hsl->hue, condition))
-    {
-        return 0;
-    }
-    if(hsl->saturation < condition->s_min || hsl->saturation > condition->s_max)
-    {
-        return 0;
-    }
-    if(hsl->luminance < condition->l_min || hsl->luminance > condition->l_max)
-    {
-        return 0;
-    }
-
-    return 1;
-}
-
-static int pixel_match_xy(unsigned int x, unsigned int y, const target_condi_struct *condition)
+static uint8 pixel_value_xy(unsigned int x, unsigned int y)
 {
     color_rgb_struct rgb;
-    color_hsl_struct hsl;
+    uint8 peak_value;
 
     readcolor(x, y, &rgb);
-    rgbtohsl(&rgb, &hsl);
-    return pixel_match_hsl(&hsl, condition);
+    peak_value = rgb.red;
+    if(rgb.green > peak_value) peak_value = rgb.green;
+    if(rgb.blue > peak_value) peak_value = rgb.blue;
+    return peak_value;
 }
 
-static int cell_match(unsigned int grid_x, unsigned int grid_y, const target_condi_struct *condition)
+static void build_grid_mask(void)
 {
-    unsigned int x0 = grid_x * COLOR_GRID_STRIDE;
-    unsigned int y0 = grid_y * COLOR_GRID_STRIDE;
-    unsigned int x1 = umin(x0 + COLOR_GRID_STRIDE / 2u, SCC8660_W - 1u);
-    unsigned int y1 = umin(y0 + COLOR_GRID_STRIDE / 2u, SCC8660_H - 1u);
-    unsigned int x2 = umin(x0 + COLOR_GRID_STRIDE - 1u, SCC8660_W - 1u);
-    unsigned int y2 = umin(y0 + COLOR_GRID_STRIDE - 1u, SCC8660_H - 1u);
-    unsigned int match_count = 0u;
+    unsigned int grid_y;
+    unsigned int grid_x;
 
-    if(pixel_match_xy(x0, y0, condition)) match_count++;
-    if(pixel_match_xy(x1, y0, condition)) match_count++;
-    if(pixel_match_xy(x0, y1, condition)) match_count++;
-    if(pixel_match_xy(x1, y1, condition)) match_count++;
-    if(pixel_match_xy(x2, y2, condition)) match_count++;
-
-    return (match_count >= COLOR_CELL_MATCH_COUNT);
-}
-
-static void build_grid_mask(const target_condi_struct *condition)
-{
-    unsigned int y;
-    unsigned int x;
-
-    for(y = 0; y < COLOR_GRID_H; y++)
+    for(grid_y = 0; grid_y < LIGHT_GRID_H; grid_y++)
     {
-        for(x = 0; x < COLOR_GRID_W; x++)
+        for(grid_x = 0; grid_x < LIGHT_GRID_W; grid_x++)
         {
-            s_grid_visit[y][x] = 0u;
-            s_grid_mask[y][x] = (uint8)cell_match(x, y, condition);
+            unsigned int x_start = grid_x * LIGHT_GRID_STRIDE;
+            unsigned int y_start = grid_y * LIGHT_GRID_STRIDE;
+            unsigned int x_end = umin(x_start + LIGHT_GRID_STRIDE, SCC8660_W);
+            unsigned int y_end = umin(y_start + LIGHT_GRID_STRIDE, SCC8660_H);
+            unsigned int x;
+            unsigned int y;
+            unsigned int bright_pixels = 0u;
+            uint8 peak_value = 0u;
+
+            for(y = y_start; y < y_end; y++)
+            {
+                for(x = x_start; x < x_end; x++)
+                {
+                    uint8 value = pixel_value_xy(x, y);
+
+                    if(value > peak_value)
+                    {
+                        peak_value = value;
+                    }
+                    if(value >= LIGHT_PIXEL_THRESHOLD)
+                    {
+                        bright_pixels++;
+                    }
+                }
+            }
+
+            s_grid_visit[grid_y][grid_x] = 0u;
+            s_grid_peak[grid_y][grid_x] = peak_value;
+            s_grid_mask[grid_y][grid_x] = (bright_pixels >= LIGHT_CELL_PIXEL_MIN) ? 1u : 0u;
         }
     }
 }
 
-static unsigned int component_score(const component_info_t *info, const target_condi_struct *condition)
+static unsigned int component_score(const component_info_t *info)
 {
     unsigned int bbox_w_cells = (unsigned int)(info->max_x - info->min_x + 1u);
     unsigned int bbox_h_cells = (unsigned int)(info->max_y - info->min_y + 1u);
-    unsigned int bbox_w = bbox_w_cells * COLOR_GRID_STRIDE;
-    unsigned int bbox_h = bbox_h_cells * COLOR_GRID_STRIDE;
-    unsigned int bbox_area = bbox_w_cells * bbox_h_cells;
-    unsigned int fill_ratio;
-    unsigned int aspect_x100;
-    unsigned int center_x;
-    unsigned int center_y;
-    unsigned int score;
-    int dist_x;
-    int dist_y;
+    unsigned int area_cells = bbox_w_cells * bbox_h_cells;
 
-    if(info->cells < 2u || bbox_area == 0u || bbox_h == 0u)
+    if(info->cells == 0u || area_cells == 0u)
     {
         return 0u;
     }
 
-    fill_ratio = (unsigned int)(info->cells * 100u / bbox_area);
-    aspect_x100 = (unsigned int)(bbox_w * 100u / bbox_h);
-
-    if(bbox_w < condition->width_min / 2u || bbox_h < condition->hight_min / 2u)
-    {
-        return 0u;
-    }
-    if(fill_ratio + 8u < condition->fill_min_x100)
-    {
-        return 0u;
-    }
-    if(aspect_x100 + 20u < condition->aspect_min_x100 || aspect_x100 > condition->aspect_max_x100 + 20u)
-    {
-        return 0u;
-    }
-
-    center_x = (info->min_x + info->max_x + 1u) * COLOR_GRID_STRIDE / 2u;
-    center_y = (info->min_y + info->max_y + 1u) * COLOR_GRID_STRIDE / 2u;
-    score = info->cells * 80u + fill_ratio * 12u;
-
-    if(s_last_result_valid)
-    {
-        dist_x = absi((int)center_x - (int)s_last_result.x);
-        dist_y = absi((int)center_y - (int)s_last_result.y);
-        score += (dist_x < (int)SCC8660_W && dist_y < (int)SCC8660_H) ? sat_sub(400u, (unsigned int)(dist_x + dist_y)) : 0u;
-    }
-    else
-    {
-        dist_x = absi((int)center_x - (int)(SCC8660_W / 2u));
-        dist_y = absi((int)center_y - (int)(SCC8660_H / 2u));
-        score += sat_sub(260u, (unsigned int)(dist_x + dist_y));
-    }
-
-    return score;
+    return info->cells * LIGHT_SCORE_PIXEL_WEIGHT + (unsigned int)info->peak_value * LIGHT_SCORE_PEAK_WEIGHT;
 }
 
-static int find_best_component(const target_condi_struct *condition, component_info_t *best_info)
+static int refine_component_bbox(const component_info_t *info, light_point_result_struct *point)
 {
-    unsigned int y;
+    unsigned int x_start;
+    unsigned int y_start;
+    unsigned int x_end;
+    unsigned int y_end;
+    unsigned int min_x = SCC8660_W - 1u;
+    unsigned int min_y = SCC8660_H - 1u;
+    unsigned int max_x = 0u;
+    unsigned int max_y = 0u;
+    unsigned int sum_x = 0u;
+    unsigned int sum_y = 0u;
+    unsigned int sum_value = 0u;
+    unsigned int pixels = 0u;
+    unsigned int width;
+    unsigned int height;
+    unsigned int bbox_area;
+    unsigned int fill_x100;
+    unsigned int aspect_x100;
     unsigned int x;
-    unsigned int best_score = 0u;
+    unsigned int y;
+    uint8 peak_value = 0u;
 
-    for(y = 0; y < COLOR_GRID_H; y++)
+    x_start = (info->min_x > 0u) ? (unsigned int)info->min_x * LIGHT_GRID_STRIDE : 0u;
+    y_start = (info->min_y > 0u) ? (unsigned int)info->min_y * LIGHT_GRID_STRIDE : 0u;
+    x_start = (x_start > LIGHT_COMPONENT_EXPAND_PIXELS) ? (x_start - LIGHT_COMPONENT_EXPAND_PIXELS) : 0u;
+    y_start = (y_start > LIGHT_COMPONENT_EXPAND_PIXELS) ? (y_start - LIGHT_COMPONENT_EXPAND_PIXELS) : 0u;
+    x_end = umin(((unsigned int)info->max_x + 1u) * LIGHT_GRID_STRIDE + LIGHT_COMPONENT_EXPAND_PIXELS, SCC8660_W);
+    y_end = umin(((unsigned int)info->max_y + 1u) * LIGHT_GRID_STRIDE + LIGHT_COMPONENT_EXPAND_PIXELS, SCC8660_H);
+
+    for(y = y_start; y < y_end; y++)
     {
-        for(x = 0; x < COLOR_GRID_W; x++)
+        for(x = x_start; x < x_end; x++)
         {
-            component_info_t info;
-            unsigned int head = 0u;
-            unsigned int tail = 0u;
-            unsigned int score;
+            uint8 value = pixel_value_xy(x, y);
 
-            if(!s_grid_mask[y][x] || s_grid_visit[y][x])
+            if(value < LIGHT_PIXEL_THRESHOLD)
             {
                 continue;
             }
 
-            info.min_x = (uint16)x;
-            info.max_x = (uint16)x;
-            info.min_y = (uint16)y;
-            info.max_y = (uint16)y;
-            info.cells = 0u;
+            if(x < min_x) min_x = x;
+            if(x > max_x) max_x = x;
+            if(y < min_y) min_y = y;
+            if(y > max_y) max_y = y;
+            if(value > peak_value) peak_value = value;
 
-            s_grid_visit[y][x] = 1u;
-            s_queue[tail++] = (uint16)(y * COLOR_GRID_W + x);
+            pixels++;
+            sum_x += x;
+            sum_y += y;
+            sum_value += value;
+        }
+    }
+
+    if(pixels == 0u)
+    {
+        return 0;
+    }
+
+    width = max_x - min_x + 1u;
+    height = max_y - min_y + 1u;
+    bbox_area = width * height;
+    fill_x100 = (bbox_area == 0u) ? 0u : (pixels * 100u / bbox_area);
+    aspect_x100 = (height == 0u) ? 0u : (width * 100u / height);
+
+    if(width < LIGHT_POINT_MIN_WIDTH || width > LIGHT_POINT_MAX_WIDTH)
+    {
+        return 0;
+    }
+    if(height < LIGHT_POINT_MIN_HEIGHT || height > LIGHT_POINT_MAX_HEIGHT)
+    {
+        return 0;
+    }
+    if(pixels < LIGHT_POINT_MIN_PIXELS || pixels > LIGHT_POINT_MAX_PIXELS)
+    {
+        return 0;
+    }
+    if(fill_x100 < LIGHT_POINT_MIN_FILL_X100)
+    {
+        return 0;
+    }
+    if(aspect_x100 < LIGHT_POINT_MIN_ASPECT_X100 || aspect_x100 > LIGHT_POINT_MAX_ASPECT_X100)
+    {
+        return 0;
+    }
+    if(peak_value < LIGHT_POINT_MIN_PEAK_VALUE)
+    {
+        return 0;
+    }
+    if(sum_value < LIGHT_POINT_MIN_SUM_VALUE)
+    {
+        return 0;
+    }
+
+    memset(point, 0, sizeof(*point));
+    point->valid = 1u;
+    point->x = sum_x / pixels;
+    point->y = sum_y / pixels;
+    point->w = width;
+    point->h = height;
+    point->pixels = pixels;
+    point->peak_value = peak_value;
+    point->score = peak_value * LIGHT_SCORE_PEAK_WEIGHT + pixels * LIGHT_SCORE_PIXEL_WEIGHT + sum_value / LIGHT_SCORE_SUM_DIV;
+    return 1;
+}
+
+static void insert_best_point(light_point_result_struct *dst, const light_point_result_struct *candidate)
+{
+    if(!candidate->valid)
+    {
+        return;
+    }
+
+    if(!dst[0].valid || candidate->score > dst[0].score)
+    {
+        dst[1] = dst[0];
+        dst[0] = *candidate;
+        return;
+    }
+
+    if(!dst[1].valid || candidate->score > dst[1].score)
+    {
+        dst[1] = *candidate;
+    }
+}
+
+static void build_merged_result(light_trace_result_struct *result)
+{
+    unsigned int i;
+    unsigned int min_x;
+    unsigned int min_y;
+    unsigned int max_x;
+    unsigned int max_y;
+    unsigned int sum_pixels = 0u;
+    unsigned int peak_value = 0u;
+    unsigned int score = 0u;
+    unsigned int center_x;
+    unsigned int center_y;
+
+    if(result->count == 0u)
+    {
+        memset(&result->merged, 0, sizeof(result->merged));
+        return;
+    }
+
+    min_x = result->points[0].x - result->points[0].w / 2u;
+    min_y = result->points[0].y - result->points[0].h / 2u;
+    max_x = min_x + result->points[0].w - 1u;
+    max_y = min_y + result->points[0].h - 1u;
+
+    for(i = 0; i < result->count; i++)
+    {
+        unsigned int x1 = result->points[i].x - result->points[i].w / 2u;
+        unsigned int y1 = result->points[i].y - result->points[i].h / 2u;
+        unsigned int x2 = x1 + result->points[i].w - 1u;
+        unsigned int y2 = y1 + result->points[i].h - 1u;
+
+        if(x1 < min_x) min_x = x1;
+        if(y1 < min_y) min_y = y1;
+        if(x2 > max_x) max_x = x2;
+        if(y2 > max_y) max_y = y2;
+
+        sum_pixels += result->points[i].pixels;
+        if(result->points[i].peak_value > peak_value)
+        {
+            peak_value = result->points[i].peak_value;
+        }
+        score += result->points[i].score;
+    }
+
+    // 当前场景固定为两个红外光点，控制时需要使用两个亮点中心坐标的中值。
+    // 检测到两个亮点时直接取两点中心坐标的平均值；若暂时只剩一个亮点，则退化为单点中心。
+    if(result->count >= 2u)
+    {
+        center_x = (result->points[0].x + result->points[1].x) / 2u;
+        center_y = (result->points[0].y + result->points[1].y) / 2u;
+    }
+    else
+    {
+        center_x = result->points[0].x;
+        center_y = result->points[0].y;
+    }
+
+    memset(&result->merged, 0, sizeof(result->merged));
+    result->merged.valid = 1u;
+    result->merged.x = center_x;
+    result->merged.y = center_y;
+    result->merged.w = max_x - min_x + 1u;
+    result->merged.h = max_y - min_y + 1u;
+    result->merged.pixels = sum_pixels;
+    result->merged.peak_value = peak_value;
+    result->merged.score = score;
+}
+
+int color_trace(light_trace_result_struct *result)
+{
+    unsigned int grid_y;
+    unsigned int grid_x;
+
+    build_grid_mask();
+    memset(result, 0, sizeof(*result));
+
+    for(grid_y = 0; grid_y < LIGHT_GRID_H; grid_y++)
+    {
+        for(grid_x = 0; grid_x < LIGHT_GRID_W; grid_x++)
+        {
+            component_info_t info;
+            unsigned int head = 0u;
+            unsigned int tail = 0u;
+            light_point_result_struct candidate;
+
+            if(!s_grid_mask[grid_y][grid_x] || s_grid_visit[grid_y][grid_x])
+            {
+                continue;
+            }
+
+            memset(&info, 0, sizeof(info));
+            info.min_x = (uint16)grid_x;
+            info.max_x = (uint16)grid_x;
+            info.min_y = (uint16)grid_y;
+            info.max_y = (uint16)grid_y;
+            info.peak_value = s_grid_peak[grid_y][grid_x];
+
+            s_grid_visit[grid_y][grid_x] = 1u;
+            s_queue[tail++] = (uint16)(grid_y * LIGHT_GRID_W + grid_x);
 
             while(head < tail)
             {
                 uint16 index = s_queue[head++];
-                uint16 cy = (uint16)(index / COLOR_GRID_W);
-                uint16 cx = (uint16)(index % COLOR_GRID_W);
+                uint16 cy = (uint16)(index / LIGHT_GRID_W);
+                uint16 cx = (uint16)(index % LIGHT_GRID_W);
                 int ny;
                 int nx;
 
@@ -336,12 +398,16 @@ static int find_best_component(const target_condi_struct *condition, component_i
                 if(cx > info.max_x) info.max_x = cx;
                 if(cy < info.min_y) info.min_y = cy;
                 if(cy > info.max_y) info.max_y = cy;
+                if(s_grid_peak[cy][cx] > info.peak_value)
+                {
+                    info.peak_value = s_grid_peak[cy][cx];
+                }
 
                 for(ny = (int)cy - 1; ny <= (int)cy + 1; ny++)
                 {
                     for(nx = (int)cx - 1; nx <= (int)cx + 1; nx++)
                     {
-                        if(nx < 0 || ny < 0 || nx >= (int)COLOR_GRID_W || ny >= (int)COLOR_GRID_H)
+                        if(nx < 0 || ny < 0 || nx >= (int)LIGHT_GRID_W || ny >= (int)LIGHT_GRID_H)
                         {
                             continue;
                         }
@@ -351,279 +417,61 @@ static int find_best_component(const target_condi_struct *condition, component_i
                         }
 
                         s_grid_visit[ny][nx] = 1u;
-                        s_queue[tail++] = (uint16)(ny * COLOR_GRID_W + nx);
+                        s_queue[tail++] = (uint16)(ny * LIGHT_GRID_W + nx);
                     }
                 }
             }
 
-            score = component_score(&info, condition);
-            if(score > best_score)
+            if(component_score(&info) == 0u)
             {
-                best_score = score;
-                *best_info = info;
+                continue;
+            }
+
+            memset(&candidate, 0, sizeof(candidate));
+            if(refine_component_bbox(&info, &candidate))
+            {
+                insert_best_point(result->points, &candidate);
             }
         }
     }
 
-    return (best_score > 0u);
-}
-
-static int refine_component_bbox(const component_info_t *info, const target_condi_struct *condition, result_struct *resu)
-{
-    unsigned int x_start = (info->min_x > 0u) ? ((unsigned int)info->min_x * COLOR_GRID_STRIDE - COLOR_GRID_STRIDE) : 0u;
-    unsigned int y_start = (info->min_y > 0u) ? ((unsigned int)info->min_y * COLOR_GRID_STRIDE - COLOR_GRID_STRIDE) : 0u;
-    unsigned int x_end = umin(((unsigned int)info->max_x + 1u) * COLOR_GRID_STRIDE + COLOR_GRID_STRIDE, SCC8660_W) - 1u;
-    unsigned int y_end = umin(((unsigned int)info->max_y + 1u) * COLOR_GRID_STRIDE + COLOR_GRID_STRIDE, SCC8660_H) - 1u;
-    unsigned int min_x = SCC8660_W - 1u;
-    unsigned int min_y = SCC8660_H - 1u;
-    unsigned int max_x = 0u;
-    unsigned int max_y = 0u;
-    unsigned int match_count = 0u;
-    unsigned int sum_x = 0u;
-    unsigned int sum_y = 0u;
-    unsigned int x;
-    unsigned int y;
-    unsigned int width;
-    unsigned int height;
-    unsigned int bbox_area;
-    unsigned int fill_ratio;
-    unsigned int aspect_x100;
-
-    for(y = y_start; y <= y_end; y++)
+    if(result->points[0].valid)
     {
-        for(x = x_start; x <= x_end; x++)
-        {
-            if(pixel_match_xy(x, y, condition))
-            {
-                if(x < min_x) min_x = x;
-                if(x > max_x) max_x = x;
-                if(y < min_y) min_y = y;
-                if(y > max_y) max_y = y;
-                match_count++;
-                sum_x += x;
-                sum_y += y;
-            }
-        }
+        result->count = 1u;
+    }
+    if(result->points[1].valid)
+    {
+        result->count = 2u;
     }
 
-    if(match_count == 0u)
+    if(result->count > 0u)
     {
-        return 0;
-    }
-
-    width = max_x - min_x + 1u;
-    height = max_y - min_y + 1u;
-    bbox_area = width * height;
-    fill_ratio = (bbox_area == 0u) ? 0u : (match_count * 100u / bbox_area);
-    aspect_x100 = (height == 0u) ? 0u : (width * 100u / height);
-
-    if(width < condition->width_min || height < condition->hight_min)
-    {
-        return 0;
-    }
-    if(width > condition->width_max || height > condition->hight_max)
-    {
-        return 0;
-    }
-    if(match_count < condition->area_min || match_count > condition->area_max)
-    {
-        return 0;
-    }
-    if(fill_ratio < condition->fill_min_x100)
-    {
-        return 0;
-    }
-    if(aspect_x100 < condition->aspect_min_x100 || aspect_x100 > condition->aspect_max_x100)
-    {
-        return 0;
-    }
-
-    resu->x = sum_x / match_count;
-    resu->y = sum_y / match_count;
-    resu->w = width;
-    resu->h = height;
-    resu->pixels = match_count;
-    resu->score = match_count + fill_ratio * 8u;
-
-    return 1;
-}
-
-static void smooth_result(result_struct *resu)
-{
-    if(!s_last_result_valid)
-    {
-        s_last_result = *resu;
-        s_last_result_valid = 1u;
+        build_merged_result(result);
+        light_trace_out = *result;
+        s_last_trace_out = *result;
+        s_last_trace_valid = 1u;
         s_lost_frames = 0u;
-        return;
+        return (int)result->count;
     }
 
-    if(absi((int)resu->x - (int)s_last_result.x) <= (int)(resu->w + COLOR_GRID_STRIDE) &&
-       absi((int)resu->y - (int)s_last_result.y) <= (int)(resu->h + COLOR_GRID_STRIDE))
-    {
-        resu->x = (resu->x * 70u + s_last_result.x * 30u) / 100u;
-        resu->y = (resu->y * 70u + s_last_result.y * 30u) / 100u;
-        resu->w = (resu->w * 65u + s_last_result.w * 35u) / 100u;
-        resu->h = (resu->h * 65u + s_last_result.h * 35u) / 100u;
-    }
-
-    s_last_result = *resu;
-    s_last_result_valid = 1u;
-    s_lost_frames = 0u;
-}
-
-void set_color_target_condi(uint16 rgb565_data, target_condi_struct *condition)
-{
-    int center_x = (int)(SCC8660_W / 2u);
-    int center_y = (int)(SCC8660_H / 2u);
-    int sx;
-    int sy;
-    color_rgb_struct rgb;
-    color_hsl_struct hsl;
-    uint8 ref_hue = 0u;
-    uint8 ref_found = 0u;
-    int min_delta = 0;
-    int max_delta = 0;
-    uint8 min_s = 240u;
-    uint8 max_s = 0u;
-    uint8 min_l = 240u;
-    uint8 max_l = 0u;
-    unsigned int valid_samples = 0u;
-    unsigned int hue_margin;
-    unsigned int sat_margin;
-    unsigned int lum_margin;
-
-    (void)rgb565_data;
-
-    readcolor((unsigned int)center_x, (unsigned int)center_y, &rgb);
-    rgbtohsl(&rgb, &hsl);
-    if(hsl.saturation >= 20u)
-    {
-        ref_hue = hsl.hue;
-        ref_found = 1u;
-    }
-
-    for(sy = center_y - COLOR_SAMPLE_RADIUS; sy <= center_y + COLOR_SAMPLE_RADIUS; sy++)
-    {
-        for(sx = center_x - COLOR_SAMPLE_RADIUS; sx <= center_x + COLOR_SAMPLE_RADIUS; sx++)
-        {
-            if(sx < 0 || sx >= (int)SCC8660_W || sy < 0 || sy >= (int)SCC8660_H)
-            {
-                continue;
-            }
-
-            readcolor((unsigned int)sx, (unsigned int)sy, &rgb);
-            rgbtohsl(&rgb, &hsl);
-
-            if(hsl.saturation < 20u)
-            {
-                continue;
-            }
-
-            if(!ref_found)
-            {
-                ref_hue = hsl.hue;
-                ref_found = 1u;
-            }
-
-            if(valid_samples == 0u)
-            {
-                min_delta = hue_delta(hsl.hue, ref_hue);
-                max_delta = min_delta;
-            }
-            else
-            {
-                int delta = hue_delta(hsl.hue, ref_hue);
-                if(delta < min_delta) min_delta = delta;
-                if(delta > max_delta) max_delta = delta;
-            }
-
-            if(hsl.saturation < min_s) min_s = hsl.saturation;
-            if(hsl.saturation > max_s) max_s = hsl.saturation;
-            if(hsl.luminance < min_l) min_l = hsl.luminance;
-            if(hsl.luminance > max_l) max_l = hsl.luminance;
-            valid_samples++;
-        }
-    }
-
-    if(!ref_found || valid_samples == 0u)
-    {
-        memset(condition, 0, sizeof(*condition));
-        return;
-    }
-
-    hue_margin = clampu((unsigned int)(absi(max_delta - min_delta) / 2 + 8), 8u, 28u);
-    sat_margin = clampu((unsigned int)(max_s - min_s) / 2u + 18u, 18u, 52u);
-    lum_margin = clampu((unsigned int)(max_l - min_l) / 2u + 18u, 18u, 54u);
-
-    min_delta -= (int)hue_margin;
-    max_delta += (int)hue_margin;
-    if(min_delta < -120) min_delta = -120;
-    if(max_delta > 120) max_delta = 120;
-
-    condition->hue_ref = ref_hue;
-    condition->h_min = wrap_hue((int)ref_hue + min_delta);
-    condition->h_max = wrap_hue((int)ref_hue + max_delta);
-    condition->hue_wrap = (condition->h_min > condition->h_max) ? 1u : 0u;
-    condition->s_min = (uint8)((min_s > sat_margin) ? (min_s - sat_margin) : 0u);
-    condition->s_max = (uint8)umin(240u, max_s + sat_margin);
-    condition->l_min = (uint8)((min_l > lum_margin) ? (min_l - lum_margin) : 0u);
-    condition->l_max = (uint8)umin(240u, max_l + lum_margin);
-    condition->width_min = COLOR_DEFAULT_WIDTH_MIN;
-    condition->hight_min = COLOR_DEFAULT_HEIGHT_MIN;
-    condition->width_max = SCC8660_W;
-    condition->hight_max = SCC8660_H;
-    condition->area_min = COLOR_DEFAULT_AREA_MIN;
-    condition->area_max = SCC8660_W * SCC8660_H * 9u / 10u;
-    condition->aspect_min_x100 = COLOR_DEFAULT_ASPECT_MIN;
-    condition->aspect_max_x100 = COLOR_DEFAULT_ASPECT_MAX;
-    condition->fill_min_x100 = COLOR_DEFAULT_FILL_MIN;
-    condition->valid = 1u;
-}
-
-int color_trace(const target_condi_struct *condition, result_struct *resu)
-{
-    component_info_t best_info;
-    result_struct result;
-
-    if(!condition->valid)
-    {
-        return 0;
-    }
-
-    build_grid_mask(condition);
-    if(find_best_component(condition, &best_info) && refine_component_bbox(&best_info, condition, &result))
-    {
-        smooth_result(&result);
-        *resu = result;
-        target_pos_out = result;
-        return 1;
-    }
-
-    if(s_last_result_valid && s_lost_frames < COLOR_TRACK_KEEP_FRAMES)
+    if(s_last_trace_valid && s_lost_frames < LIGHT_TRACK_KEEP_FRAMES)
     {
         s_lost_frames++;
-        *resu = s_last_result;
-        target_pos_out = s_last_result;
-        return 1;
+        *result = s_last_trace_out;
+        light_trace_out = s_last_trace_out;
+        return (int)result->count;
     }
 
-    s_last_result_valid = 0u;
+    s_last_trace_valid = 0u;
     s_lost_frames = 0u;
-    memset(resu, 0, sizeof(*resu));
-    memset(&target_pos_out, 0, sizeof(target_pos_out));
+    memset(&light_trace_out, 0, sizeof(light_trace_out));
     return 0;
 }
 
 void color_trace_reset(void)
 {
-    memset(&target_pos_out, 0, sizeof(target_pos_out));
-    memset(&s_last_result, 0, sizeof(s_last_result));
-    s_last_result_valid = 0u;
+    memset(&light_trace_out, 0, sizeof(light_trace_out));
+    memset(&s_last_trace_out, 0, sizeof(s_last_trace_out));
+    s_last_trace_valid = 0u;
     s_lost_frames = 0u;
-}
-
-uint8 color_trace_is_ready(const target_condi_struct *condition)
-{
-    return condition->valid;
 }

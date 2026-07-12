@@ -1,65 +1,45 @@
-#ifndef color_tracer_H
-#define color_tracer_H
+#ifndef COLOR_TRACER_H
+#define COLOR_TRACER_H
 
 #include "zf_common_headfile.h"
 
-#define COLOR_GRID_STRIDE       8u
-#define COLOR_GRID_W            ((SCC8660_W + COLOR_GRID_STRIDE - 1u) / COLOR_GRID_STRIDE)
-#define COLOR_GRID_H            ((SCC8660_H + COLOR_GRID_STRIDE - 1u) / COLOR_GRID_STRIDE)
+// ==================== 可调试参数区 ====================
+// 亮点检测网格边长，值越小越容易保留小光点，但计算量会增大。
+#define LIGHT_GRID_STRIDE                4u
+// 网格列数，由网格步长自动推导。
+#define LIGHT_GRID_W                     ((SCC8660_W + LIGHT_GRID_STRIDE - 1u) / LIGHT_GRID_STRIDE)
+// 网格行数，由网格步长自动推导。
+#define LIGHT_GRID_H                     ((SCC8660_H + LIGHT_GRID_STRIDE - 1u) / LIGHT_GRID_STRIDE)
+// 需要保留的最强亮点数量，当前场景固定为两个红外光点。
+#define LIGHT_POINT_MAX_COUNT            2u
+// ==================== 可调试参数区 ====================
 
 typedef struct
 {
-    unsigned char           h_min;
-    unsigned char           h_max;
-    unsigned char           s_min;
-    unsigned char           s_max;
-    unsigned char           l_min;
-    unsigned char           l_max;
-    unsigned char           hue_ref;
-    unsigned char           hue_wrap;
-    unsigned char           valid;
-    unsigned char           reserved;
-    unsigned int            width_min;
-    unsigned int            hight_min;
-    unsigned int            width_max;
-    unsigned int            hight_max;
-    unsigned int            area_min;
-    unsigned int            area_max;
-    unsigned int            aspect_min_x100;
-    unsigned int            aspect_max_x100;
-    unsigned int            fill_min_x100;
-} target_condi_struct;
-
-typedef struct
-{
+    uint8                   valid;
+    uint8                   reserved0;
+    uint16                  reserved1;
     unsigned int            x;
     unsigned int            y;
     unsigned int            w;
     unsigned int            h;
     unsigned int            pixels;
+    unsigned int            peak_value;
     unsigned int            score;
-} result_struct;
+} light_point_result_struct;
 
 typedef struct
 {
-    unsigned char           red;
-    unsigned char           green;
-    unsigned char           blue;
-} color_rgb_struct;
+    uint8                   count;
+    uint8                   reserved0;
+    uint16                  reserved1;
+    light_point_result_struct points[LIGHT_POINT_MAX_COUNT];
+    light_point_result_struct merged;
+} light_trace_result_struct;
 
-typedef struct
-{
-    unsigned char           hue;
-    unsigned char           saturation;
-    unsigned char           luminance;
-} color_hsl_struct;
+extern light_trace_result_struct light_trace_out;
 
-extern target_condi_struct target_color_condi;
-extern result_struct target_pos_out;
-
-int     color_trace             (const target_condi_struct *condition, result_struct *resu);
-void    set_color_target_condi  (uint16 rgb565_data, target_condi_struct *condition);
+int     color_trace             (light_trace_result_struct *result);
 void    color_trace_reset       (void);
-uint8   color_trace_is_ready    (const target_condi_struct *condition);
 
 #endif

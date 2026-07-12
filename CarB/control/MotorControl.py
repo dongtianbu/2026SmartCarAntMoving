@@ -59,6 +59,43 @@ r = 0
 def _clamp(value, lower, upper):
     return max(lower, min(upper, value))
 
+def _scale_duty_tuple(duty_tuple, scale):
+    """按统一比例缩放三路电机占空比。"""
+    return tuple(int(round(duty_value * scale)) for duty_value in duty_tuple)
+
+def _bias_single_duty(duty_value, bias_start, max_duty=MAX_DUTY):
+    """对单路非零电机占空比做起转补偿。
+
+    该函数用于处理“电机在较小占空比下不转”的实际情况。
+    当 duty 非零时，会把其绝对值从 [0, max_duty] 重新映射到
+    [bias_start, max_duty]，从而保证一旦需要转动，就直接越过电机死区。
+    """
+    duty_int = int(round(duty_value))
+    if duty_int == 0:
+        return 0
+
+    bias_start = max(0, min(int(bias_start), int(max_duty)))
+    if bias_start <= 0:
+        return max(-max_duty, min(max_duty, duty_int))
+
+    duty_sign = 1 if duty_int > 0 else -1
+    duty_mag = min(int(max_duty), abs(duty_int))
+
+    if bias_start >= max_duty:
+        return duty_sign * max_duty
+
+    biased_mag = bias_start + int(
+        duty_mag * (max_duty - bias_start) / max_duty
+    )
+    return duty_sign * min(int(max_duty), biased_mag)
+
+def bias_duty_tuple(duty_tuple, bias_start, max_duty=MAX_DUTY):
+    """对三路电机占空比统一做起转补偿。"""
+    return tuple(
+        _bias_single_duty(duty_value, bias_start, max_duty=max_duty)
+        for duty_value in duty_tuple
+    )
+
 def chassis_vector_to_wheel_speed(vx, vy, omega=0):
     return tuple(
         (mix_x * vx) + (mix_y * vy) + omega
@@ -145,14 +182,67 @@ def ConvertVToVxVy(VSpeed, theta):
     Vy = VSpeed * math.sin(rad)
     return Vx, Vy
 
-def drive_vector(vx, vy, omega=0, acceleration=0, max_duty=MAX_DUTY, min_duty_start=MIN_DUTY_START):
-    duty_v1, duty_v2, duty_v3 = vector_to_duty(
+def drive_vector(
+    vx,
+    vy,
+    omega=0,
+    acceleration=0,
+    max_duty=MAX_DUTY,
+    min_duty_start=MIN_DUTY_START,
+    duty_bias_start=0,
+    translate_duty_bias_start=None,
+    rotate_duty_bias_start=None,
+):
+    """把平移和旋转分别换算后再合成最终三路电机占空比。
+
+    这样可以让平移分量和旋转分量使用不同的起转补偿。
+    当前 CarB 跟随控制中，平移需要越过死区，旋转先不补偿。
+    """
+    if translate_duty_bias_start is None:
+        translate_duty_bias_start = duty_bias_start
+    if rotate_duty_bias_start is None:
+        rotate_duty_bias_start = duty_bias_start
+
+    translate_duty = vector_to_duty(
         vx,
         vy,
-        omega=omega,
+        omega=0,
         max_duty=max_duty,
         min_duty_start=min_duty_start
     )
+    rotate_duty = vector_to_duty(
+        0,
+        0,
+        omega=omega,
+        max_duty=max_duty,
+        min_duty_start=0,
+    )
+
+    if translate_duty_bias_start > 0:
+        translate_duty = bias_duty_tuple(
+            translate_duty,
+            translate_duty_bias_start,
+            max_duty=max_duty,
+        )
+
+    if rotate_duty_bias_start > 0:
+        rotate_duty = bias_duty_tuple(
+            rotate_duty,
+            rotate_duty_bias_start,
+            max_duty=max_duty,
+        )
+
+    duty_v1 = translate_duty[0] + rotate_duty[0]
+    duty_v2 = translate_duty[1] + rotate_duty[1]
+    duty_v3 = translate_duty[2] + rotate_duty[2]
+
+    max_abs_duty = max(abs(duty_v1), abs(duty_v2), abs(duty_v3))
+    if max_abs_duty > max_duty and max_abs_duty > 0:
+        duty_v1, duty_v2, duty_v3 = _scale_duty_tuple(
+            (duty_v1, duty_v2, duty_v3),
+            max_duty / max_abs_duty,
+        )
+
     _ramp_to(duty_v1, duty_v2, duty_v3, acceleration)
     return duty_v1, duty_v2, duty_v3
 
@@ -285,4 +375,3 @@ if __name__ == "__main__":
 #   speed=60  → duty=±6000  → 电压≈7.2V
 #   speed=70  → duty=±7000  → 电压≈8.4V
 #   speed=100 → duty=±10000 → 电压=12V（满压，慎用）
-

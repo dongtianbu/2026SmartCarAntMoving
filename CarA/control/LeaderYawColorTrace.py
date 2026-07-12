@@ -279,7 +279,7 @@ def _clamp(value, lower, upper):
 
 
 def _wrap_angle_deg(angle_deg):
-    """把任意角度折算到 [-180, 180]，用于处理 359 度到 0 度附近的跨界问题。"""
+    """旧版角度折返工具，仅保留给需要等效朝向判断的代码使用。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -287,9 +287,9 @@ def _wrap_angle_deg(angle_deg):
     return angle_deg
 
 
-def _shortest_angle_error(target_deg, current_deg):
-    """返回从 current yaw 转到 target yaw 的最短有符号角度误差。"""
-    return _wrap_angle_deg(target_deg - current_deg)
+def _continuous_yaw_error(target_deg, current_deg):
+    """返回连续 yaw 误差，不做 180/-180 折返。"""
+    return target_deg - current_deg
 
 
 def _step_towards(current, target, step):
@@ -431,7 +431,7 @@ def _update_yaw_hold(result, current_yaw, yaw_pid, yaw_state, config, now_ms):
         dt_s = time.ticks_diff(now_ms, yaw_state["last_ms"]) / 1000.0
     yaw_state["last_ms"] = now_ms
 
-    error = _shortest_angle_error(yaw_state["target_yaw"], current_yaw)
+    error = _continuous_yaw_error(yaw_state["target_yaw"], current_yaw)
     if abs(error) <= config["yaw_hold_deadband_deg"]:
         target_omega = 0.0
         yaw_pid.reset()
