@@ -35,13 +35,21 @@ led = Pin('C4', Pin.OUT, value=True)
 switch2 = Pin('D9', Pin.IN, pull=Pin.PULL_UP_47K)
 state2 = switch2.value()
 
-motor_2 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_C28_PWM_C29, 15000, duty=0, invert=False)
-motor_1 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_D4_PWM_D5, 15000, duty=0, invert=False)
+motor_1 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_C28_PWM_C29, 15000, duty=0, invert=False)
+motor_2 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_D4_PWM_D5, 15000, duty=0, invert=False)
 motor_3 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_C30_PWM_C31, 15000, duty=0, invert=False)
 
 MAX_DUTY = 10000
 MAX_SPEED = 100
 MIN_DUTY_START = 1500
+FORWARD_DIRECTION_ANGLE = 270           # 车体“前进”对应的运动角度；当前装车后前后轴反了，因此前进改为 270 度
+BACKWARD_DIRECTION_ANGLE = 90           # 车体“后退”对应的运动角度；需与 FORWARD_DIRECTION_ANGLE 保持相反
+LEFT_DIRECTION_ANGLE = 180              # 车体“左移”对应的运动角度；若后续发现左右也反了，只需要修改这里
+RIGHT_DIRECTION_ANGLE = 0               # 车体“右移”对应的运动角度；需与 LEFT_DIRECTION_ANGLE 保持相反
+FORWARD_LEFT_DIRECTION_ANGLE = 225      # 左前方向；前后轴反向后，同步调整四个斜向角，避免组合运动定义不一致
+FORWARD_RIGHT_DIRECTION_ANGLE = 315     # 右前方向
+BACKWARD_LEFT_DIRECTION_ANGLE = 135     # 左后方向
+BACKWARD_RIGHT_DIRECTION_ANGLE = 45     # 右后方向
 current_v1 = 0
 current_v2 = 0
 current_v3 = 0
@@ -197,6 +205,10 @@ def drive_vector(
 
     这样可以让平移分量和旋转分量使用不同的起转补偿。
     当前 CarB 跟随控制中，平移需要越过死区，旋转先不补偿。
+    注意：
+    - 这里的 `max_duty` 限制的是三路混合后“单个电机”的 duty 绝对值上限；
+    - 不是三路 duty 相加后的总和上限；
+    - 如果三路相加后某一路超过 `max_duty`，会把三路按同一比例整体缩小。
     """
     if translate_duty_bias_start is None:
         translate_duty_bias_start = duty_bias_start
@@ -247,19 +259,19 @@ def drive_vector(
     return duty_v1, duty_v2, duty_v3
 
 def forward(speed, acceleration=0, direction=0):
-    vx, vy = ConvertVToVxVy(speed, 90)
+    vx, vy = ConvertVToVxVy(speed, FORWARD_DIRECTION_ANGLE)
     return drive_vector(vx, vy, acceleration=acceleration)
 
 def backward(speed, acceleration=0, direction=0):
-    vx, vy = ConvertVToVxVy(speed, 270)
+    vx, vy = ConvertVToVxVy(speed, BACKWARD_DIRECTION_ANGLE)
     return drive_vector(vx, vy, acceleration=acceleration)
 
 def move_left(speed, acceleration=0, direction=0):
-    vx, vy = ConvertVToVxVy(speed, 180)
+    vx, vy = ConvertVToVxVy(speed, LEFT_DIRECTION_ANGLE)
     return drive_vector(vx, vy, acceleration=acceleration)
 
 def move_right(speed, acceleration=0, direction=0):
-    vx, vy = ConvertVToVxVy(speed, 0)
+    vx, vy = ConvertVToVxVy(speed, RIGHT_DIRECTION_ANGLE)
     return drive_vector(vx, vy, acceleration=acceleration)
 
 def stop(acceleration=0):
@@ -286,29 +298,29 @@ def move_angle(angle, speed, acceleration=0, direction=0):
     return drive_vector(vx, vy, omega=omega, acceleration=acceleration)
 
 def move_forward_left(speed, acceleration=0, direction=0):
-    move_angle(135, speed, acceleration, direction)
+    move_angle(FORWARD_LEFT_DIRECTION_ANGLE, speed, acceleration, direction)
 
 def move_forward_right(speed, acceleration=0, direction=0):
-    move_angle(45, speed, acceleration, direction)
+    move_angle(FORWARD_RIGHT_DIRECTION_ANGLE, speed, acceleration, direction)
 
 def move_backward_left(speed, acceleration=0, direction=0):
-    move_angle(225, speed, acceleration, direction)
+    move_angle(BACKWARD_LEFT_DIRECTION_ANGLE, speed, acceleration, direction)
 
 def move_backward_right(speed, acceleration=0, direction=0):
-    move_angle(315, speed, acceleration, direction)
+    move_angle(BACKWARD_RIGHT_DIRECTION_ANGLE, speed, acceleration, direction)
 
 def demo():
-#     print("前进...")
-#     forward(70, 100)
-#     time.sleep_ms(1000)
-#     print("停止...")
-#     stop(100)
-#     time.sleep_ms(500)
-#     print("后退...")
-#     backward(70, 100)
-#     time.sleep_ms(1000)
-#     print("停止...")
-#     stop(100)
+    print("前进...")
+    forward(70, 100)
+    time.sleep_ms(1000)
+    print("停止...")
+    stop(100)
+    time.sleep_ms(500)
+    print("后退...")
+    backward(70, 100)
+    time.sleep_ms(1000)
+    print("停止...")
+    stop(100)
     time.sleep_ms(500)
     print("左移...")
     move_left(60, 100)

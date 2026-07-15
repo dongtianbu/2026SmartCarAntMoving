@@ -4,8 +4,7 @@
 1. 停止三电机，避免初始化期间误动作。
 2. 初始化并校准主车 IMU，然后持续向从车广播主车 yaw。
 3. 等待视觉模块完成上电稳定和摄像头标定，确认串口能收到有效视觉帧。
-4. 等待 C8 按键按下，作为人工确认启动追踪的安全开关。
-5. 启动颜色追踪；首次识别到目标物时锁定当前 yaw，追踪目标的同时闭环保持车头角度。
+4. 视觉准备完成后立即启动颜色追踪；首次识别到目标物时锁定当前 yaw，追踪目标的同时闭环保持车头角度。
 
 说明：
 - 摄像头颜色阈值、曝光等真正的标定一般在视觉模块侧完成。
@@ -68,19 +67,6 @@ VISION_READY_TIMEOUT_MS = 8000
 # 启动追踪前要求连续收到的有效视觉帧数量。
 # 数值越大，启动越稳但等待越久；3 帧通常足够确认串口和摄像头已正常输出。
 VISION_READY_FRAME_COUNT = 3
-
-# 启动颜色追踪的人工确认按键。参考 example 中按键用法：
-# Pin(..., Pin.IN, pull=Pin.PULL_UP_47K)，按下时读取到低电平 0。
-START_KEY_PIN = "C8"
-
-# 启动按键上拉配置。当前按键接法为上拉输入，未按下为 1，按下为 0。
-START_KEY_PULL = Pin.PULL_UP_47K
-
-# 启动按键有效电平。0 表示低电平按下；若硬件改成高电平有效再改成 1。
-START_KEY_ACTIVE_LEVEL = 0
-
-# 启动按键消抖时间，单位 ms。按键连续保持有效超过这个时间，才认为真的按下。
-START_KEY_DEBOUNCE_MS = 30
 
 # 颜色追踪基础占空比。当前主要用于状态输出，实际控制由颜色 PID 和占空比限幅决定。
 TRACK_BASE_DUTY = 6000
@@ -213,10 +199,6 @@ DEFAULT_CONFIG = {
     "camera_calibration_wait_ms": CAMERA_CALIBRATION_WAIT_MS,
     "vision_ready_timeout_ms": VISION_READY_TIMEOUT_MS,
     "vision_ready_frame_count": VISION_READY_FRAME_COUNT,
-    "start_key_pin": START_KEY_PIN,
-    "start_key_pull": START_KEY_PULL,
-    "start_key_active_level": START_KEY_ACTIVE_LEVEL,
-    "start_key_debounce_ms": START_KEY_DEBOUNCE_MS,
     "track_base_duty": TRACK_BASE_DUTY,
     "track_max_duty": TRACK_MAX_DUTY,
     "track_min_active_duty": TRACK_MIN_ACTIVE_DUTY,
@@ -560,38 +542,9 @@ def _wait_camera_ready(color_trace, broadcaster, led, stop_switch, stop_state, c
 
     mcx.clear_rx()
     if config["enable_serial_log"]:
-        print("视觉模块已输出有效帧，等待人工按键确认。")
+        print("视觉模块已输出有效帧，主车将直接启动颜色追踪。")
     return True
 
-
-def _is_start_key_pressed(start_key, config):
-    """判断 C8 启动按键是否处于按下状态。"""
-    return start_key.value() == config["start_key_active_level"]
-
-
-def _wait_start_key(start_key, broadcaster, led, stop_switch, stop_state, config):
-    """等待 C8 按键确认启动，等待期间继续广播 yaw 且保持停车。"""
-    counters = {"yaw_tick": 0, "send_count": 0}
-
-    if config["enable_serial_log"]:
-        print("视觉已准备好，等待按下 {} 后启动颜色追踪。".format(config["start_key_pin"]))
-
-    while True:
-        _service_yaw_broadcast(broadcaster, led, config, counters)
-        _stop_all_motors()
-
-        if stop_switch.value() != stop_state:
-            return False
-
-        if _is_start_key_pressed(start_key, config):
-            time.sleep_ms(config["start_key_debounce_ms"])
-            if _is_start_key_pressed(start_key, config):
-                if config["enable_serial_log"]:
-                    print("{} 已按下，颜色追踪启动。".format(config["start_key_pin"]))
-                return True
-
-        time.sleep_ms(config["main_loop_delay_ms"])
-        gc.collect()
 
 
 def run_leader_yaw_color_trace(config=None):
@@ -604,11 +557,6 @@ def run_leader_yaw_color_trace(config=None):
         Pin.IN,
         pull=config["stop_switch_pull"],
     )
-    start_key = Pin(
-        config["start_key_pin"],
-        Pin.IN,
-        pull=config["start_key_pull"],
-    )
     stop_state = stop_switch.value()
 
     _stop_all_motors()
@@ -617,7 +565,7 @@ def run_leader_yaw_color_trace(config=None):
 
     if config["enable_serial_log"]:
         print("=== CarA 主车 yaw 广播 + 颜色追踪 ===")
-        print("当前主车上电功能：先校准 IMU 并广播 yaw，再等待视觉标定和 C8 按键后启动颜色追踪。")
+        print("当前主车上电功能：先校准 IMU 并广播 yaw，视觉准备完成后自动启动颜色追踪。")
         print("颜色追踪期间：识别到目标物后锁定当前 yaw，并叠加 yaw 闭环保持车头角度。")
         print("视觉屏幕：{}x{}，目标中心：({}, {})".format(
             color_trace.SCREEN_W,
@@ -629,10 +577,6 @@ def run_leader_yaw_color_trace(config=None):
             config["track_max_duty"],
         ))
         print("停止按键：{}".format(config["stop_switch_pin"]))
-        print("颜色追踪启动按键：{}，按下电平={}".format(
-            config["start_key_pin"],
-            config["start_key_active_level"],
-        ))
         print("请先保持主车静止，等待 IMU 校准。")
 
     try:
@@ -643,10 +587,9 @@ def run_leader_yaw_color_trace(config=None):
         if not _wait_camera_ready(color_trace, broadcaster, led, stop_switch, stop_state, config):
             return
 
-        if not _wait_start_key(start_key, broadcaster, led, stop_switch, stop_state, config):
-            return
-
         color_trace.start()
+        if config["enable_serial_log"]:
+            print("视觉准备完成，颜色追踪已自动启动。")
         counters = {"yaw_tick": 0, "send_count": 0, "loop_count": 0}
         last_gc_ms = time.ticks_ms()
         latest_yaw = None

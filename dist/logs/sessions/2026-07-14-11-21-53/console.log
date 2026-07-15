@@ -1,0 +1,21 @@
+=== AIPID 上位机自动调参启动 ===
+会话时间戳：2026-07-14-11-21-53
+会话日志目录：D:\2026_SmartCar\PersonalCode\dist\logs\sessions\2026-07-14-11-21-53
+串口配置：{'port': 'COM11', 'port_keyword': '', 'baudrate': 115200, 'bytesize': 8, 'stopbits': 1.0, 'parity': 'N', 'flow_control': 'none', 'timeout_s': 0.1}
+候选串口：COM11
+尝试连接 COM11 ...
+AI_STATUS paused=True deviation_offset=0.0 remaining_ms=0 m
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+OK AI_STATUS paused=True deviation_offset=0.0 remaining_ms=0 manual_remaining_ms=0
+已连接 CarB：COM11
+发送 AI_STOP，让从车进入暂停状态并清空启动阶段的 AI_METRIC。
+OK AI_STOP
+OK AI_STATUS paused=True deviation_offset=0.0 remaining_ms=0 manual_remaining_ms=0
+PID_KP=0.14
+PID_KI=0.07000000000000001
+PID_KD=0.3
+PID_INTEGRAL_LIMIT=52
+YAW_DEADBA
+GET YAW_DEADBAND_DEG 第 1 次未读到完整回包，回包='YAW_DEADBA'。
+自动调参已按请求终止。

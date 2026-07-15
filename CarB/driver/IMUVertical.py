@@ -25,6 +25,7 @@ class ImuSensorVertical:
                  acc_range_g=8, gyro_range_dps=2000,
                  acc_alpha=0.20, comp_alpha=0.98,
                  gyro_cali_n=300,
+                 yaw_sign=1,
                  sign_ax=1, sign_ay=1, sign_az=1,
                  sign_gx=1, sign_gy=1, sign_gz=1):
         self._capture_div = capture_div
@@ -34,6 +35,7 @@ class ImuSensorVertical:
         self._acc_alpha = acc_alpha
         self._comp_alpha = comp_alpha
         self._gyro_cali_n = gyro_cali_n
+        self._yaw_sign = -1.0 if yaw_sign < 0 else 1.0
         self._sign_acc = (sign_ax, sign_ay, sign_az)
         self._sign_gyro = (sign_gx, sign_gy, sign_gz)
 
@@ -161,7 +163,7 @@ class ImuSensorVertical:
 
         gyro_x_new = gx
         gyro_y_new = -gz
-        gyro_z_new = gy
+        gyro_z_new = self._yaw_sign * gy
 
         self._ax = ax
         self._ay = ay
@@ -183,6 +185,7 @@ class ImuSensorVertical:
 
         # yaw 使用连续积分角度，不再限制到 [-180, 180]。
         # 因此正向转过 180 度后会继续变成 190、200...，负向同理会继续变成 -190、-200...。
+        # yaw_sign 可用于切换正负方向约定。
         self._yaw += gyro_z_new * dt
 
         return {

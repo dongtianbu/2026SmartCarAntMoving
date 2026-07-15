@@ -1,14 +1,14 @@
 """使用 PID 闭环让从车 yaw 跟随主车 yaw。
 
-本模块是在无线 yaw 接收测试之后的下一步：
-- 主车 CarA 发送可读 ASCII 文本行："YAW:<deg>\\r\\n"。
-- 从车 CarB 接收最新主车 yaw，同时读取自己的 IMU yaw。
-- PID 根据两车连续 yaw 误差输出原地旋转速度，直到两车 yaw 一致。
+流程说明：
+- 主车 CarA 发送 ASCII 文本行 `"YAW:<deg>\\r\\n"`。
+- 从车 CarB 接收主车 yaw，同时读取自身 IMU yaw。
+- PID 根据两车连续 yaw 误差输出原地旋转速度，直到两车朝向一致。
 
-安全说明：
-- 第一次调参时建议把车轮架空。
-- 如果从车越调越偏，把下方 ROTATE_SIGN 改成相反数。
-- 如果主车 yaw 丢失，从车会立刻停电机。
+安全提示：
+- 第一次调参建议把车轮架空。
+- 如果越调越偏，修改 `ROTATE_SIGN` 的符号。
+- 主车 yaw 丢失时，从车会立即停止电机。
 """
 
 from machine import Pin
@@ -26,10 +26,10 @@ from LeaderYawReceiveTest import (
 
 
 # ---------------------------------------------------------------------------
-# 人工调参区
+# 人工调参
 # ---------------------------------------------------------------------------
 
-# 无线文本 yaw 输入参数，必须与 CarA/connection/CarFollowProtocol.py 保持一致。
+# 无线文本 yaw 输入参数，需与 CarA/connection/CarFollowProtocol.py 保持一致
 SELF_ID = 2
 LEADER_ID = 1
 UART_ID = 2
@@ -37,7 +37,7 @@ BAUDRATE = 115200
 RX_TEXT_BUF_LIMIT = 128
 LEADER_TIMEOUT_MS = 1500
 
-# IMU 参数，保持与现有 IMUVertical 用法一致。
+# IMU 参数，保持与 IMUVertical 用法一致
 IMU_CAPTURE_DIV = 1
 IMU_TICK_MS = 10
 IMU_ACC_RANGE_G = 8
@@ -47,24 +47,23 @@ IMU_COMP_ALPHA = 0.98
 IMU_GYRO_CALI_N = 300
 IMU_CALIBRATE_ON_START = True
 IMU_CALIBRATION_SETTLE_MS = 500
+IMU_YAW_SIGN = 1  # 1: 保持当前 yaw 方向；-1: 整体反向，可切换顺时针旋转时角度增减关系
 
-# PID 参数。误差是“主车连续 yaw - 从车连续 yaw”，单位是度，不再做 180/-180 折返。
-# 控制输出会传给 MotorControl.rotate(speed)。
-# 现有 MotorControl 中 speed=58 大约对应 5800 duty，speed=85 大约对应 8500 duty。
-# 因此只要误差超过死区，非零输出会被抬到 MIN_COMMAND_SPEED，避免低占空比电机不动。
-PID_KP = 0.3
-PID_KI = 0.05
-PID_KD = 0.1
+# PID 参数决定 yaw 误差如何映射到旋转速度。
+# 输出最终通过 MotorControl.rotate(speed) 驱动。
+# MIN_COMMAND_SPEED 用于克服静摩擦，避免指令太小转不动。
+PID_KP = 0.18
+PID_KI = 0.07
+PID_KD = 0.3
 PID_INTEGRAL_LIMIT = 60.0
-YAW_DEADBAND_DEG = 0.2
-MAX_ROTATE_SPEED = 85.0
-MIN_COMMAND_SPEED = 52.0
+YAW_DEADBAND_DEG = 0.8
+MAX_ROTATE_SPEED = 64.0
+MIN_COMMAND_SPEED = 42.0
 
-# 如果从车朝远离主车 yaw 的方向转，把这里改成 -1.0。
+# 如果跟随方向反了，把 ROTATE_SIGN 改成相反数
 ROTATE_SIGN = -1.0
 
-# 主循环时序和状态灯。当前板子的 C4 是低电平点亮：
-# Pin.value(0) 表示亮，Pin.value(1) 表示灭。
+# 主循环时序和状态灯配置，当前 C4 为低电平点亮
 LOOP_DELAY_MS = 1
 GC_INTERVAL_MS = 1000
 STATUS_PRINT_EVERY = 25
@@ -80,13 +79,10 @@ START_KEY_PULL = Pin.PULL_UP_47K
 START_KEY_ACTIVE_LEVEL = 0
 START_KEY_DEBOUNCE_MS = 30
 
-# 可选电机链路自检。正常运行时建议保持 False。
-# 如果改成 True，从车会在 IMU 校准后短暂原地旋转，然后再进入 yaw 跟随。
-# 这个开关用于确认 MotorControl.rotate(...)、电机供电和接线是否正常。
+# 是否启用启动前电机自检，正常运行建议保持 False
 MOTOR_SELF_TEST_ON_START = False
 MOTOR_SELF_TEST_SPEED = 60.0
 MOTOR_SELF_TEST_MS = 300
-
 
 DEFAULT_CONFIG = {
     "self_id": SELF_ID,
@@ -104,6 +100,7 @@ DEFAULT_CONFIG = {
     "imu_gyro_cali_n": IMU_GYRO_CALI_N,
     "imu_calibrate_on_start": IMU_CALIBRATE_ON_START,
     "imu_calibration_settle_ms": IMU_CALIBRATION_SETTLE_MS,
+    "imu_yaw_sign": IMU_YAW_SIGN,
     "pid_kp": PID_KP,
     "pid_ki": PID_KI,
     "pid_kd": PID_KD,
@@ -128,7 +125,7 @@ DEFAULT_CONFIG = {
     "motor_self_test_on_start": MOTOR_SELF_TEST_ON_START,
     "motor_self_test_speed": MOTOR_SELF_TEST_SPEED,
     "motor_self_test_ms": MOTOR_SELF_TEST_MS,
-    # 复用 LeaderYawReceiveTest 中 C4StatusLed 需要的闪烁时序参数。
+    # 复用 LeaderYawReceiveTest / C4StatusLed 所需的状态灯时序参数
     "led_pattern_period_ms": 4000,
     "led_blink_on_ms": 700,
     "led_blink_gap_ms": 500,
@@ -153,7 +150,7 @@ def clamp(value, lower, upper):
 
 
 def wrap_angle_deg(angle_deg):
-    """旧版角度折返工具，仅保留给需要等效朝向判断的代码使用。"""
+    """把角度归一化到 [-180, 180] 区间。"""
     while angle_deg > 180.0:
         angle_deg -= 360.0
     while angle_deg < -180.0:
@@ -167,7 +164,7 @@ def continuous_yaw_error(target_deg, current_deg):
 
 
 def shortest_angle_error(target_deg, current_deg):
-    """兼容旧调用名：当前系统使用连续 yaw 误差，不再做最短角度折返。"""
+    """兼容旧接口；当前实现等价于 continuous_yaw_error。"""
     return continuous_yaw_error(target_deg, current_deg)
 
 
@@ -177,7 +174,7 @@ def _is_start_key_pressed(start_key, config):
 
 def _wait_start_key(start_key, config):
     if config["enable_serial_log"]:
-        print("从车 IMU 校准完成，等待按下 {} 后启动 yaw 跟随。".format(
+        print("等待 IMU 初始化完成后，按下 {} 开始 yaw 跟随".format(
             config["start_key_pin"],
         ))
 
@@ -187,7 +184,7 @@ def _wait_start_key(start_key, config):
             time.sleep_ms(config["start_key_debounce_ms"])
             if _is_start_key_pressed(start_key, config):
                 if config["enable_serial_log"]:
-                    print("{} 已按下，从车开始 yaw 跟随。".format(
+                    print("{} 已按下，开始 yaw 跟随".format(
                         config["start_key_pin"],
                     ))
                 return
@@ -195,9 +192,8 @@ def _wait_start_key(start_key, config):
         time.sleep_ms(config["loop_delay_ms"])
         gc.collect()
 
-
 class YawPID:
-    """带 dt、输出限幅和积分限幅的小型 PID 控制器。"""
+    """带 dt、积分限幅和输出限幅的简化 PID 控制器。"""
 
     def __init__(self, kp, ki, kd, output_limit, integral_limit):
         self.kp = kp
@@ -251,6 +247,7 @@ class FollowLeaderYawPID:
             acc_alpha=config["imu_acc_alpha"],
             comp_alpha=config["imu_comp_alpha"],
             gyro_cali_n=config["imu_gyro_cali_n"],
+            yaw_sign=config["imu_yaw_sign"],
         )
         self.pid = YawPID(
             config["pid_kp"],
@@ -271,15 +268,15 @@ class FollowLeaderYawPID:
             Pin.IN,
             pull=self.config["start_key_pull"],
         )
-        print("从车 IMU 初始化中...")
+        print("CarB IMU initializing...")
         self.imu.init()
         if self.config["imu_calibrate_on_start"]:
-            print("从车陀螺仪校准中，请保持从车静止。")
+            print("CarB IMU calibrating, keep vehicle still.")
             time.sleep_ms(self.config["imu_calibration_settle_ms"])
             self.imu.calibrate()
-            print("从车陀螺仪校准完成，开始等待主车 yaw。")
+            print("CarB IMU calibration finished, ready for yaw follow.")
         else:
-            print("从车跳过陀螺仪校准，直接等待主车 yaw。")
+            print("CarB IMU calibration skipped, ready for yaw follow.")
         _wait_start_key(start_key, self.config)
         self.pid.reset()
         self.last_loop_ms = time.ticks_ms()
@@ -374,12 +371,12 @@ def run_follow_leader_yaw_pid(config=None):
             time.sleep_ms(config["loop_delay_ms"])
 
     if config["enable_serial_log"]:
-        print("=== CarB 主车 yaw 跟随 PID ===")
-        print("输入格式：主车发送 ASCII 文本 YAW:<deg>")
-        print("C4：一个长闪=未收到有效 yaw，基本常亮=正在跟随 yaw")
-        print("死区：+/-{} 度".format(config["yaw_deadband_deg"]))
+        print("=== CarB yaw follow PID ===")
+        print("Leader car should keep sending ASCII line: YAW:<deg>")
+        print("Keep the follower still before yaw follow starts; C4 status LED indicates link state.")
+        print("Yaw deadband: +/-{} deg".format(config["yaw_deadband_deg"]))
         print(
-            "PID：kp={} ki={} kd={} 最大速度={} 方向系数={}".format(
+            "PID kp={} ki={} kd={} max_rotate_speed={} rotate_sign={}".format(
                 config["pid_kp"],
                 config["pid_ki"],
                 config["pid_kd"],

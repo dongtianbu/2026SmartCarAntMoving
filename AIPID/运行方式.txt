@@ -1,0 +1,11 @@
+命令行自动调参：
+python AIPID\auto_tune_carb_pid.py
+
+命令行下发历史最佳参数：
+python AIPID\run_best_params.py
+
+启动上位机界面：
+python AIPID\aipid_upper_computer.py
+
+打包上位机 exe：
+AIPID\build_upper_computer.bat
