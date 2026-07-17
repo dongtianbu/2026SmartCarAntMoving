@@ -1,0 +1,10 @@
+{
+  "session_name": "gui-2026-07-16-23-46-07",
+  "updated_at": "2026-07-16 23:46:07",
+  "status": "failed",
+  "error_message": "没有找到可用串口，请检查 USB 转串口连接，或在 SERIAL_PORT 中指定端口",
+  "trial_count": 0,
+  "best_parameters": null,
+  "best_score": null,
+  "best_detail": {}
+}

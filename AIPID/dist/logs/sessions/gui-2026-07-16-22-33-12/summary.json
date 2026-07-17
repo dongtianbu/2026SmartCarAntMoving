@@ -1,0 +1,10 @@
+{
+  "session_name": "gui-2026-07-16-22-33-12",
+  "updated_at": "2026-07-16 22:34:12",
+  "status": "failed",
+  "error_message": "等待 CarB 串口握手超时，最后错误：could not open port 'COM11': FileNotFoundError(2, '系统找不到指定的文件。', None, 2)",
+  "trial_count": 0,
+  "best_parameters": null,
+  "best_score": null,
+  "best_detail": {}
+}

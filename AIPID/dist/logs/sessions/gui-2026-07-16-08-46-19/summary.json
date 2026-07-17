@@ -1,0 +1,10 @@
+{
+  "session_name": "gui-2026-07-16-08-46-19",
+  "updated_at": "2026-07-16 08:47:23",
+  "status": "failed",
+  "error_message": "等待 CarB 串口握手超时，最后错误：could not open port 'COM11': PermissionError(13, '拒绝访问。', None, 5)",
+  "trial_count": 0,
+  "best_parameters": null,
+  "best_score": null,
+  "best_detail": {}
+}

@@ -1,22 +1,49 @@
 from machine import Pin
-from smartcar import ticker
+import gc
 import time
 import math
 
-IMU_CLASS_NAME = ""
-try:
-    from seekfree import IMU660RB as IMU660
-    IMU_CLASS_NAME = "IMU660RB"
-except ImportError:
-    try:
-        from seekfree import IMU660RX as IMU660
-        IMU_CLASS_NAME = "IMU660RX"
-    except ImportError:
-        from seekfree import IMU660RA as IMU660
-        IMU_CLASS_NAME = "IMU660RA"
+_IMU_CLASS = None
+_IMU_CLASS_NAME = ""
+_TICKER_FACTORY = None
 
 ACC_LSB_PER_G_MAP = {2: 16384.0, 4: 8192.0, 8: 4096.0, 16: 2048.0}
 GYRO_LSB_PER_DPS_MAP = {2000: 16.4, 1000: 32.8, 500: 65.6, 250: 131.2, 125: 262.4}
+
+
+def _resolve_imu_class():
+    """延迟导入具体 IMU 型号，避免模块导入阶段提前拉起 seekfree 大模块。"""
+    global _IMU_CLASS, _IMU_CLASS_NAME
+    if _IMU_CLASS is not None:
+        return _IMU_CLASS, _IMU_CLASS_NAME
+
+    gc.collect()
+    try:
+        from seekfree import IMU660RB as imu_class
+        imu_class_name = "IMU660RB"
+    except ImportError:
+        try:
+            from seekfree import IMU660RX as imu_class
+            imu_class_name = "IMU660RX"
+        except ImportError:
+            from seekfree import IMU660RA as imu_class
+            imu_class_name = "IMU660RA"
+
+    _IMU_CLASS = imu_class
+    _IMU_CLASS_NAME = imu_class_name
+    gc.collect()
+    return _IMU_CLASS, _IMU_CLASS_NAME
+
+
+def _load_ticker_factory():
+    """延迟导入 ticker，降低 IMU 模块导入时的内存峰值。"""
+    global _TICKER_FACTORY
+    if _TICKER_FACTORY is None:
+        gc.collect()
+        from smartcar import ticker as ticker_factory
+        _TICKER_FACTORY = ticker_factory
+        gc.collect()
+    return _TICKER_FACTORY
 
 
 class ImuSensorVertical:
@@ -67,8 +94,10 @@ class ImuSensorVertical:
         self._calibrated = False
 
     def init(self):
-        IMU660.help()
-        self._imu = IMU660(self._capture_div)
+        imu_class, imu_class_name = _resolve_imu_class()
+        ticker_factory = _load_ticker_factory()
+        imu_class.help()
+        self._imu = imu_class(self._capture_div)
         self._imu.info()
         self._imu_data = self._imu.get()
 
@@ -76,7 +105,7 @@ class ImuSensorVertical:
             self._ticker_flag = True
             self._tick_count += 1
 
-        self._pit = ticker(1)
+        self._pit = ticker_factory(1)
         self._pit.capture_list(self._imu)
         self._pit.callback(on_tick)
         self._pit.start(self._tick_ms)
@@ -88,7 +117,7 @@ class ImuSensorVertical:
                 count += 1
             time.sleep_ms(1)
 
-        print("Using", IMU_CLASS_NAME, "(Vertical mount)")
+        print("Using", imu_class_name, "(Vertical mount)")
         return True
 
     def calibrate(self):

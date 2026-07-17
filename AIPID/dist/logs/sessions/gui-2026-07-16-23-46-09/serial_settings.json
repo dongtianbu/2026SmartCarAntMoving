@@ -1,0 +1,14 @@
+{
+  "session_name": "gui-2026-07-16-23-46-09",
+  "created_at": "2026-07-16 23:46:09",
+  "serial_settings": {
+    "port": "",
+    "port_keyword": "",
+    "baudrate": 115200,
+    "bytesize": 8,
+    "stopbits": 1.0,
+    "parity": "N",
+    "flow_control": "none",
+    "timeout_s": 0.08
+  }
+}

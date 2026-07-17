@@ -14,7 +14,18 @@ from machine import Pin
 import gc
 import time
 
-from WirelessUsartCars import WirelessUsartCars
+_WIRELESS_USART_CLASS = None
+
+
+def _load_wireless_usart_class():
+    """延迟导入无线串口类，避免只用状态灯时也提前拉起协议模块。"""
+    global _WIRELESS_USART_CLASS
+    if _WIRELESS_USART_CLASS is None:
+        gc.collect()
+        from WirelessUsartCars import WirelessUsartCars as wireless_usart_class
+        _WIRELESS_USART_CLASS = wireless_usart_class
+        gc.collect()
+    return _WIRELESS_USART_CLASS
 
 
 STATE_ID_LEADER_YAW = 0x31
@@ -77,7 +88,8 @@ class LeaderYawReceiver:
 
     def __init__(self, config):
         self.config = config
-        self.radio = WirelessUsartCars(
+        wireless_usart_class = _load_wireless_usart_class()
+        self.radio = wireless_usart_class(
             uart_id=config["uart_id"],
             baudrate=config["baudrate"],
             self_id=config["self_id"],

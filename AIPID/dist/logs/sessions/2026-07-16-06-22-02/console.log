@@ -1,0 +1,30 @@
+=== AIPID 上位机自动调参启动 ===
+会话时间戳：2026-07-16-06-22-02
+会话日志目录：D:\2026_SmartCar\PersonalCode\AIPID\dist\logs\sessions\2026-07-16-06-22-02
+串口配置：{'port': 'COM11', 'port_keyword': '', 'baudrate': 115200, 'bytesize': 8, 'stopbits': 1.0, 'parity': 'N', 'flow_control': 'none', 'timeout_s': 0.08}
+协议前缀：AIPID|
+候选串口：COM11
+尝试连接 COM11 ...
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+CMD: PREFIX=AIPID| ; SEND AIPID|NAME=VALUE | AIPID|GET NAME | AIPID|LIST | AIPID|AI_STOP | AIPID|AI_START | AIPID|AI_DEVIATE deg ms | AIPID|AI_PERTURB angle speed rotate ms | AIPID|AI_STATUS
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+OK AI_STATUS paused=True 0.000,0.000,0_ms=0 manual_remaining_ms=0
+已连接 CarB：COM11
+发送 AI_STOP，让从车进入暂停状态并清空启动阶段的 AI_METRIC。
+AI_STOP 第 1 次未收到有效 OK，回包=''，准备重试。
+AI_STOP 第 2 次未收到有效 OK，回包=''，准备重试。
+.000,0.000,0,0,5069
+AI_STOP 第 3 次未收到有效 OK，回包='.000,0.000,0,0,5069'，准备重试。
+OK AI_STO0.000,0.000,0.000,0,0,5069

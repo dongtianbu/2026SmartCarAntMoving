@@ -10,7 +10,10 @@ python -m PyInstaller ^
   --windowed ^
   --onefile ^
   --name AIPID_UpperComputer ^
-  aipid_upper_computer.py
+  --distpath "%~dp0dist" ^
+  --workpath "%~dp0build" ^
+  --specpath "%~dp0" ^
+  "%~dp0aipid_upper_computer.py"
 
 if errorlevel 1 (
   echo.
@@ -20,5 +23,5 @@ if errorlevel 1 (
 )
 
 echo.
-echo 打包完成，exe 位于 dist\AIPID_UpperComputer.exe
+echo 打包完成，exe 位于 AIPID\dist\AIPID_UpperComputer.exe
 pause

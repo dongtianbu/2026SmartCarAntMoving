@@ -7,8 +7,17 @@
 
 import time
 
-import MotorControl
-from MCXVisionUsart import MCXVisionUsart
+
+_MOTOR_CONTROL_MODULE = None
+
+
+def _load_motor_control_module():
+    """延迟导入底盘控制模块，避免视觉控制器一导入就创建电机对象。"""
+    global _MOTOR_CONTROL_MODULE
+    if _MOTOR_CONTROL_MODULE is None:
+        import MotorControl as motor_control_module
+        _MOTOR_CONTROL_MODULE = motor_control_module
+    return _MOTOR_CONTROL_MODULE
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +114,7 @@ class ColorTraceController:
     def __init__(
         self,
         mcx_usart,
+        motor_control=None,
         base_duty=COLOR_BASE_DUTY_DEFAULT,
         max_tracking_duty=COLOR_MAX_TRACKING_DUTY_DEFAULT,
         min_tracking_duty=COLOR_MIN_TRACKING_DUTY_DEFAULT,
@@ -123,6 +133,7 @@ class ColorTraceController:
         command_ramp_step=COLOR_COMMAND_RAMP_STEP_DEFAULT,
     ):
         self.mcx = mcx_usart
+        self.motor_control = motor_control if motor_control is not None else _load_motor_control_module()
         self.SCREEN_W = getattr(mcx_usart, "VIEW_WIDTH", self.SCREEN_W)
         self.SCREEN_H = getattr(mcx_usart, "VIEW_HEIGHT", self.SCREEN_H)
         self.CENTER_X = self.SCREEN_W // 2
@@ -137,11 +148,11 @@ class ColorTraceController:
         self.command_filter_alpha = min(1.0, max(0.05, float(command_filter_alpha)))
         self.command_ramp_step = max(0.0, float(command_ramp_step))
         self.buf = bytearray()
-        self.max_tracking_duty = min(MotorControl.MAX_DUTY, int(max_tracking_duty))
+        self.max_tracking_duty = min(self.motor_control.MAX_DUTY, int(max_tracking_duty))
         self.min_tracking_duty = min(self.max_tracking_duty, max(0, int(min_tracking_duty)))
         self.target_hold_ms = max(0, int(target_hold_ms))
         self.max_tracking_speed = min(
-            int(self.max_tracking_duty * MotorControl.MAX_SPEED / MotorControl.MAX_DUTY),
+            int(self.max_tracking_duty * self.motor_control.MAX_SPEED / self.motor_control.MAX_DUTY),
             max(1.0, float(max_tracking_speed)),
         )
 
@@ -231,7 +242,7 @@ class ColorTraceController:
 
         frame_size = getattr(self.mcx, "FRAME_SIZE", 11)
         while len(self.buf) >= frame_size:
-            frame = MCXVisionUsart.parse_frame(bytes(self.buf[:frame_size]))
+            frame = type(self.mcx).parse_frame(bytes(self.buf[:frame_size]))
             if frame is not None:
                 frames.append(frame)
                 self.buf = self.buf[frame_size:]
@@ -417,7 +428,7 @@ class ColorTraceController:
                 vy_target,
             )
             vx, vy = self._ramp_command(filtered_vx, filtered_vy)
-            raw_duty = MotorControl.vector_to_duty(
+            raw_duty = self.motor_control.vector_to_duty(
                 vx,
                 vy,
                 max_duty=self.max_tracking_duty,

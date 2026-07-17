@@ -1,0 +1,398 @@
+=== AIPID 上位机自动调参启动 ===
+会话时间戳：2026-07-16-05-58-12
+会话日志目录：D:\2026_SmartCar\PersonalCode\dist\logs\sessions\2026-07-16-05-58-12
+串口配置：{'port': 'COM11', 'port_keyword': '', 'baudrate': 115200, 'bytesize': 8, 'stopbits': 1.0, 'parity': 'N', 'flow_control': 'none', 'timeout_s': 0.08}
+候选串口：COM11
+尝试连接 COM11 ...
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+E0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0,0,5069
+00,0.000,0,0,5069
+RR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+nsupported
+ERR unsupported
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0,0,5069
+,0,5069
+0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsuppor0,0.000,0,0,5069
+ERR unsupported
+,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.ERR unsupported
+00,0,0,5069
+d
+0,0,0,5069
+pported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+ERR unsupported
+000,0.000,0.000,0,0,5069
+pported
+00,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000ERR unsupported
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR u0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.0R unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+检测到其他串口模块返回 ERR unsupported，已忽略，继续等待 CarB 的 AI 握手。
+单一串口暂未收到 AI 握手，继续等待从车启动后的回包。
+尝试连接 COM11 ...
+ed
+OK AI_STATUS paused=True d0.000,0.000,0.000,0,0,5069
+ed
+OK AI_STATUS paused=True deviation_offset=0.0 remaining_ms=0 manual_remaining_ms=0
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+00,0.000,0.000,0,0,5069ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR u0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR0.000,0.000,0.000,0,0,5069
+unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0,5069
+0,5069
+rted
+0,5069
+rted
+0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0.000,0,0,5069
+pported
+00,0.000,0.000,0,0,5069
+pported
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupporte000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsuppor0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0,5069
+d
+,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0.000,0.000,0,0,5069
+0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR uns0.000,0.000,0.000,0,0,5069
+已连接 CarB：COM11
+发送 AI_STOP，让从车进入暂停状态并清空启动阶段的 AI_METRIC。
+OK AI_STOP
+ERR unsupported
+OK AI_STATUS paused=True deviation_offset=0.0 remaining_ms=0 manual_remaining_ms=0
+PID_KP=0.15
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+nsupported
+0,0,0,5069
+RR unsupported
+,0,0,5069
+R unsupported
+0,0,5069
+ted
+ERR unsupported
+0,5069
+orted
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5rted
+0.000,0.000,0.000,0,0,5069
+ERR unsupported0.000,0.000,0.000,0,0,5069
+ERR unsupported
+ERR unsupported
+0.0ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+RR unsupported
+00,0.000,0,0,5069
+RR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.ERR unsupported
+0.000,0.000,0.0ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+,0,0,5069
+d
+0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+unsupported
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsu00,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0,0,5069
+R unsupported
+00,0.000,0,0,5069
+R unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0,0,0,5069
+pported
+0,0,5069
+0.000,0.000,0.000,0,0,5069
+rted
+,0,5069
+ted
+0,5069
+RR unsupported
+,5069
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+.000,0.000,0.000,0,0,5069
+unsupported
+000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+ERR unsupported
+0,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsup0.000,0.000,0.000,0,0,5069
+ported
+ERR unsupported
+0.000,0ERR unsupported
+ERR unsupported
+000,0.000,0,0,5069
+ported
+00,0.000,0,0,5069
+0,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ER000,0,0,5069
+ERR unsupported
+00,0,0,5069
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+GET PID_KI 第 1 次未读到完整回包，回包='ERR unsupported'。
+P0.000,0.000,0.000,0,0,5069
+PID_KI=0.07000000000000001
+PID_KD=0.01
+ERR unsupported0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0,0,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+0.000,0.000,0.000,0,0,5069
+supported
+,5069
+0.000,0.000,0.000,0,0,5069
+ERR unsupported
+ERR unsupported
+5069
+nsupported
+00.
+000,0.000,0.000,0,0,5069
+ERR unsupported
+000,0.000,0.000,0,0,5069
+0.000,0.000,0.000,0,0,5069
+自动调参已按请求终止。

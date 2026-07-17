@@ -1,0 +1,10 @@
+{
+  "session_name": "gui-2026-07-16-08-43-47",
+  "updated_at": "2026-07-16 08:44:50",
+  "status": "failed",
+  "error_message": "等待 CarB 串口握手超时，最后错误：None",
+  "trial_count": 0,
+  "best_parameters": null,
+  "best_score": null,
+  "best_detail": {}
+}

@@ -4,6 +4,24 @@ import gc
 import time
 import math
 from math import pi
+
+# ---------------------------------------------------------------------------
+# 人工调试区
+# 与底盘初始化直接相关、现场可能会调整的硬件参数统一放在文件开头。
+# ---------------------------------------------------------------------------
+
+STATUS_LED_PIN = "C4"                              # 调试演示时使用的状态灯引脚
+STOP_SWITCH_PIN = "D9"                            # 调试演示时使用的停止按键引脚
+STOP_SWITCH_PULL = Pin.PULL_UP_47K                # 停止按键上拉配置
+STATUS_LED_OFF_LEVEL = True                       # 当前板子的 C4 熄灭电平
+
+MOTOR_PWM_FREQUENCY = 15000                       # 三路电机 PWM 频率
+MOTOR_1_CHANNEL = MOTOR_CONTROLLER.PWM_C28_PWM_C29
+MOTOR_2_CHANNEL = MOTOR_CONTROLLER.PWM_D4_PWM_D5
+MOTOR_3_CHANNEL = MOTOR_CONTROLLER.PWM_C30_PWM_C31
+MOTOR_1_INVERT = False
+MOTOR_2_INVERT = False
+MOTOR_3_INVERT = False
 # led = Pin('C4', Pin.OUT, value=True)
 # switch2 = Pin('D9', Pin.IN, pull=Pin.PULL_UP_47K)
 # state2 = switch2.value()
@@ -31,13 +49,12 @@ from math import pi
 # motor_2.info()
 # motor_3.info()
 
-led = Pin('C4', Pin.OUT, value=True)
-switch2 = Pin('D9', Pin.IN, pull=Pin.PULL_UP_47K)
-state2 = switch2.value()
-
-motor_1 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_C28_PWM_C29, 15000, duty=0, invert=False)
-motor_2 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_D4_PWM_D5, 15000, duty=0, invert=False)
-motor_3 = MOTOR_CONTROLLER(MOTOR_CONTROLLER.PWM_C30_PWM_C31, 15000, duty=0, invert=False)
+led = None
+switch2 = None
+state2 = None
+motor_1 = None
+motor_2 = None
+motor_3 = None
 
 MAX_DUTY = 10000
 MAX_SPEED = 100
@@ -59,10 +76,27 @@ WHEEL_MIXING = (
     (-0.5, math.cos(pi / 6)),
 )
 
-Vx = 0
-Vy = 0
-omiga = 0
-r = 0
+def _ensure_status_io():
+    """仅在演示/调试模式下初始化状态灯和停止按键。"""
+    global led, switch2, state2
+    if led is None:
+        led = Pin(STATUS_LED_PIN, Pin.OUT, value=STATUS_LED_OFF_LEVEL)
+    if switch2 is None:
+        switch2 = Pin(STOP_SWITCH_PIN, Pin.IN, pull=STOP_SWITCH_PULL)
+        state2 = switch2.value()
+
+
+def _ensure_motor_controllers():
+    """首次真正控制底盘时再创建三路电机对象，降低模块导入期内存占用。"""
+    global motor_1, motor_2, motor_3
+    if motor_1 is not None and motor_2 is not None and motor_3 is not None:
+        return
+
+    gc.collect()
+    motor_1 = MOTOR_CONTROLLER(MOTOR_1_CHANNEL, MOTOR_PWM_FREQUENCY, duty=0, invert=MOTOR_1_INVERT)
+    motor_2 = MOTOR_CONTROLLER(MOTOR_2_CHANNEL, MOTOR_PWM_FREQUENCY, duty=0, invert=MOTOR_2_INVERT)
+    motor_3 = MOTOR_CONTROLLER(MOTOR_3_CHANNEL, MOTOR_PWM_FREQUENCY, duty=0, invert=MOTOR_3_INVERT)
+    gc.collect()
 
 def _clamp(value, lower, upper):
     return max(lower, min(upper, value))
@@ -151,6 +185,7 @@ def vector_to_duty(vx, vy, omega=0, max_duty=MAX_DUTY, min_duty_start=MIN_DUTY_S
 
 def _set_motors(v1, v2, v3):
     global current_v1, current_v2, current_v3
+    _ensure_motor_controllers()
     v1 = max(-MAX_DUTY, min(MAX_DUTY, int(v1)))
     v2 = max(-MAX_DUTY, min(MAX_DUTY, int(v2)))
     v3 = max(-MAX_DUTY, min(MAX_DUTY, int(v3)))
@@ -184,11 +219,10 @@ def _ramp_to(target_v1, target_v2, target_v3, acceleration):
 
 def ConvertVToVxVy(VSpeed, theta):
     #theta only can be 0~360
-    global Vx, Vy
     rad = math.radians(theta)
-    Vx = VSpeed * math.cos(rad)
-    Vy = VSpeed * math.sin(rad)
-    return Vx, Vy
+    vx = VSpeed * math.cos(rad)
+    vy = VSpeed * math.sin(rad)
+    return vx, vy
 
 def drive_vector(
     vx,
@@ -342,6 +376,8 @@ def demo():
     print("演示结束")
 
 if __name__ == "__main__":
+    _ensure_status_io()
+    _ensure_motor_controllers()
     print("全向轮三轮小车运动控制模块")
     print("可用函数:")
     print("  forward(speed, acceleration, direction)  - 前进")

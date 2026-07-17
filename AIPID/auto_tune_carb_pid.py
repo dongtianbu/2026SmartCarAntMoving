@@ -48,7 +48,7 @@ def detect_project_root(app_dir: Path) -> Path:
         if candidate in checked:
             continue
         checked.add(candidate)
-        if (candidate / "CarB" / "control" / "FollowLeaderYawColorTrace.py").exists():
+        if (candidate / "CarB" / "control" / "FollowLeaderYawColorTraceLite.py").exists():
             return candidate
     return Path(__file__).resolve().parents[1]
 
@@ -64,7 +64,7 @@ PROJECT_ROOT_DIR = detect_project_root(APP_DIR)  # 项目根目录，供自动�
 
 SERIAL_PORT = ""                         # 指定电脑串口号，例如 "COM5"；留空时脚本会自动探测
 PORT_KEYWORD = ""                        # 自动探测串口时的设备名关键词，例如 "CH340"、"USB"；留空则不按名称过滤
-BAUDRATE = 115200                        # 必须与 CarB/control/FollowLeaderYawColorTrace.py 中 YAW_BAUDRATE 保持一致
+BAUDRATE = 115200                        # 必须与 CarB/control/FollowLeaderYawColorTraceLite.py 中 YAW_BAUDRATE 保持一致
 SERIAL_BYTESIZE = 8                      # 串口数据位默认值；上位机默认使用 8 位数据位
 SERIAL_STOPBITS = 1.0                    # 串口停止位默认值；上位机默认使用 1 位停止位
 SERIAL_PARITY = "N"                      # 串口校验位默认值；N=无校验，E=偶校验，O=奇校验，M=Mark，S=Space
@@ -78,10 +78,20 @@ PARAMETER_COMMAND_TIMEOUT_S = 4.0        # 单个参数读写命令等待回包�
 CONTROL_COMMAND_TIMEOUT_S = 3.0          # AI_STOP、AI_START、AI_PERTURB 等控制命令等待回包的最长时间
 REQUIRE_AI_FIRMWARE = True               # True 时要求 CarB 支持 AI_STATUS/AI_PERTURB；检测到旧代码会立即停止并提示重新下载
 FAILED_TRIAL_CONTINUE = True             # True 时某一轮参数下发/控制命令失败只给大惩罚分并继续搜索，不让脚本整体退出
+SERIAL_IGNORE_UNRELATED_ERROR = True     # True 时忽略其他串口模块插入的 ERR/ERR unsupported，仅把匹配当前命令的回包视为有效结果
+TUNING_PROTOCOL_PREFIX = "AIPID|"        # 上位机与 CarB 调参串口协议前缀；只有带此前缀的命令和回包才会被双方当作有效协议内容
+TUNING_PROTOCOL_FRAME_HEAD = "<AIPID_BEGIN>"  # 调参协议包头；用于在杂乱串口流中定位一帧协议消息的开始
+TUNING_PROTOCOL_FRAME_TAIL = "<AIPID_END>"    # 调参协议包尾；用于在杂乱串口流中定位一帧协议消息的结束
+TUNING_PROTOCOL_ACCEPT_LEGACY = False    # False 时只接受带协议前缀的新协议；如需临时兼容旧版从车，可改为 True
+SERIAL_RX_FRAME_BUFFER_LIMIT = 8192      # 桌面端串口帧解析缓冲区上限，避免长时间噪声导致缓存无限增长
+AI_STATUS_RETRY_ATTEMPTS = 4             # 确认 AI_STATUS 时额外重试次数，降低偶发丢帧导致的误判
 INITIAL_STOP_SETTLE_SECONDS = 0.8        # 连接成功后先发送 AI_STOP 并等待这段时间，让从车停止发送 AI_METRIC 后再读取参数
 INITIAL_DRAIN_SECONDS = 0.8              # 初始停车后继续清理串口残留数据的时间，避免旧 AI_METRIC 混入 GET 回包
 ONLY_SEND_CHANGED_PARAMETERS = True      # True 时每轮只发送相对当前车上状态发生变化的参数，显著减少无线串口命令拥堵
 PARAMETER_COMMAND_GAP_SECONDS = 0.08     # 两条参数命令之间的最小间隔，避免无线串口连续写入过快造成丢包
+HANDSHAKE_RETRY_INTERVAL_S = 0.8         # 单一串口等待握手时，保持连接状态下重新发送 AI_STATUS 的间隔
+COMMAND_RETRY_SLEEP_S = 0.15             # 普通命令一次失败后的重试等待时间，保持简单稳定
+SINGLE_PORT_KEEP_OPEN_DURING_HANDSHAKE = True  # True 时若当前只选中一个串口，握手阶段保持连接而不是反复断开重连
 
 STOP_SETTLE_SECONDS = 0.8                # 每轮试验前发送 AI_STOP 后等待车辆完全停稳的时间
 PRETRIAL_RANDOM_PERTURB_ENABLED = True   # True 时每轮试验前先做随机开环扰动；当前默认只保留平移扰动
@@ -137,7 +147,7 @@ AI_SUGGEST_AFTER_BASELINE = True         # True 时 baseline 后先让 AI 推荐
 AI_SUGGEST_AFTER_EACH_ROUND = True       # True 时每个坐标搜索轮次后再让 AI 根据新日志推荐候选参数
 
 WRITE_BACK_TO_SOURCE = True              # True 时把最佳参数写回 CarB 控制代码顶部常量区
-SOURCE_PARAMETER_FILE = PROJECT_ROOT_DIR / "CarB" / "control" / "FollowLeaderYawColorTrace.py"  # 最终回写参数的代码文件
+SOURCE_PARAMETER_FILE = PROJECT_ROOT_DIR / "CarB" / "control" / "FollowLeaderYawColorTraceLite.py"  # 最终回写参数的代码文件
 LOG_DIR = APP_DIR / "logs"  # 保存每轮试验 CSV/JSON 记录的目录；打包后会落在 exe 同级目录
 SESSION_LOG_ROOT = LOG_DIR / "sessions"  # 每次上位机启动后的独立日志目录根路径；目录名使用启动时间戳
 SESSION_NAME_FORMAT = "%Y-%m-%d-%H-%M-%S"  # 会话日志目录名时间格式，便于按启动时间快速查找
@@ -435,37 +445,71 @@ class SerialBridge:
         self.serial_settings = resolve_serial_settings(serial_settings)
         self.serial = serial_module.Serial(**build_serial_open_kwargs(serial_module, port, self.serial_settings))
         self.port = port
+        self.rx_text_buf = ""
+        self.rx_payload_queue: list[str] = []
 
     def close(self) -> None:
         self.serial.close()
 
     def send_line(self, line: str) -> None:
-        self.serial.write((line.strip() + "\n").encode("utf-8"))
+        payload = wrap_protocol_command(line)
+        if not payload:
+            return
+        self.serial.write((payload + "\n").encode("utf-8"))
         self.serial.flush()
 
-    def read_line(self) -> str | None:
-        raw = self.serial.readline()
+    def read_raw_text(self) -> str | None:
+        read_size = getattr(self.serial, "in_waiting", 0) or 1
+        raw = self.serial.read(read_size)
         if not raw:
             return None
-        return raw.decode("utf-8", errors="ignore").strip()
+        return raw.decode("utf-8", errors="ignore")
+
+    def read_line(self, allow_legacy: bool = False) -> str | None:
+        while True:
+            if self.rx_payload_queue:
+                return self.rx_payload_queue.pop(0)
+
+            frames, self.rx_text_buf = extract_protocol_frames_from_buffer(
+                self.rx_text_buf,
+                allow_legacy=allow_legacy,
+            )
+            if frames:
+                self.rx_payload_queue.extend(frames)
+                continue
+
+            raw_text = self.read_raw_text()
+            if not raw_text:
+                return None
+            self.rx_text_buf += raw_text
+            if len(self.rx_text_buf) > SERIAL_RX_FRAME_BUFFER_LIMIT:
+                self.rx_text_buf = self.rx_text_buf[-SERIAL_RX_FRAME_BUFFER_LIMIT:]
 
     def drain_input(self, seconds: float = COMMAND_DRAIN_SECONDS) -> list[str]:
         """发送新命令前清掉串口里遗留的旧日志，避免把上一条回包误判成当前回包。"""
         drained = []
         end_time = time.monotonic() + max(0.0, seconds)
+        self.rx_payload_queue = []
+        self.rx_text_buf = ""
         while time.monotonic() < end_time:
             raise_if_cancel_requested()
-            line = self.read_line()
-            if line:
-                drained.append(line)
+            raw_text = self.read_raw_text()
+            if raw_text:
+                self.rx_text_buf += raw_text
+                frames, self.rx_text_buf = extract_protocol_frames_from_buffer(
+                    self.rx_text_buf,
+                    allow_legacy=True,
+                )
+                drained.extend(frames)
+        self.rx_payload_queue = []
         return drained
 
-    def read_lines_for(self, seconds: float) -> list[str]:
+    def read_lines_for(self, seconds: float, allow_legacy: bool = False) -> list[str]:
         end_time = time.monotonic() + seconds
         lines = []
         while time.monotonic() < end_time:
             raise_if_cancel_requested()
-            line = self.read_line()
+            line = self.read_line(allow_legacy=allow_legacy)
             if line:
                 lines.append(line)
                 print(line)
@@ -474,29 +518,37 @@ class SerialBridge:
     def command(self, line: str, timeout_s: float = 1.5, drain_before: bool = True) -> str:
         if drain_before:
             self.drain_input()
-        self.send_line(line)
-        deadline = time.monotonic() + timeout_s
-        last_line = ""
         command_upper = line.strip().upper()
         get_name = command_upper[4:].strip() if command_upper.startswith("GET ") else ""
         set_name = command_upper.split("=", 1)[0].strip() if "=" in command_upper else ""
+        simple_command = command_upper.split()[0] if command_upper else ""
+        self.send_line(line)
+        deadline = time.monotonic() + timeout_s
+        last_line = ""
+        last_error = ""
         while time.monotonic() < deadline:
             raise_if_cancel_requested()
             reply = self.read_line()
             if not reply:
                 continue
-            last_line = reply
             print(reply)
-            if get_name and reply.upper().startswith(get_name + "="):
-                return reply
-            if set_name and reply.upper().startswith("OK " + set_name + "="):
-                return reply
-            if set_name and reply.upper().startswith("OK "):
-                # 这是其它参数的延迟回包，继续等当前参数自己的确认。
+            sanitized = sanitize_reply_for_command(
+                reply,
+                command_upper,
+                get_name,
+                set_name,
+                simple_command,
+            )
+            if sanitized:
+                return sanitized
+            error_reply = extract_error_reply(reply)
+            if error_reply:
+                last_error = error_reply
+                if not SERIAL_IGNORE_UNRELATED_ERROR:
+                    return error_reply
                 continue
-            if reply.startswith("OK") or reply.startswith("ERR"):
-                return reply
-        return last_line
+            last_line = normalize_serial_text(reply)
+        return last_error or last_line
 
 
 def load_pyserial():
@@ -528,6 +580,42 @@ def candidate_ports(list_ports_module, serial_settings: SerialSettings | None = 
     return list_available_ports(list_ports_module, settings.port_keyword)
 
 
+def probe_bridge_handshake(bridge: SerialBridge, probe_seconds: float = PORT_PROBE_SECONDS) -> tuple[bool, bool]:
+    """在已打开的串口上探测一次 CarB 握手结果。
+
+    返回：
+    1. 是否已经收到 AI_STATUS 或 AI_METRIC，说明从车主循环已就绪。
+    2. 是否已经收到新版协议启动横幅，例如 TUNE READY / CMD: FRAME=...。
+       这只能说明新版调参模块已启动，不能说明 AI_STATUS 已可立即响应。
+    """
+    bridge.send_line("AI_STATUS")
+    lines = []
+    has_protocol_banner = False
+    probe_deadline = time.monotonic() + probe_seconds
+
+    while time.monotonic() < probe_deadline:
+        raise_if_cancel_requested()
+        raw_text = bridge.read_raw_text()
+        if not raw_text:
+            continue
+
+        bridge.rx_text_buf += raw_text
+        frames, bridge.rx_text_buf = extract_protocol_frames_from_buffer(
+            bridge.rx_text_buf,
+            allow_legacy=False,
+        )
+        for payload in frames:
+            lines.append(payload)
+            print(payload)
+            normalized_payload = normalize_serial_text(payload).upper()
+            if normalized_payload.startswith("TUNE READY") or normalized_payload.startswith("CMD:"):
+                has_protocol_banner = True
+
+    has_ai_status = any(bool(extract_ai_status_reply(line)) for line in lines)
+    has_metric = any(bool(extract_metric_fragment(line)) for line in lines)
+    return has_ai_status or has_metric, has_protocol_banner
+
+
 def open_bridge(serial_module, list_ports_module, serial_settings: SerialSettings | None = None) -> SerialBridge:
     settings = resolve_serial_settings(serial_settings)
     ports = candidate_ports(list_ports_module, settings)
@@ -537,6 +625,54 @@ def open_bridge(serial_module, list_ports_module, serial_settings: SerialSetting
     print("候选串口：{}".format(", ".join(ports)))
     deadline = time.monotonic() + READY_WAIT_SECONDS
     last_error = None
+
+    if len(ports) == 1 and SINGLE_PORT_KEEP_OPEN_DURING_HANDSHAKE:
+        port = ports[0]
+        bridge = None
+        while time.monotonic() < deadline:
+            raise_if_cancel_requested()
+            try:
+                if bridge is None:
+                    print("尝试连接 {} ...".format(port))
+                    bridge = SerialBridge(serial_module, port, settings)
+                    bridge.drain_input()
+
+                has_ai_handshake, has_protocol_banner = probe_bridge_handshake(bridge)
+                if has_ai_handshake:
+                    print("已连接 CarB：{}".format(port))
+                    return bridge
+
+                if has_protocol_banner:
+                    print("已收到新版协议启动横幅，说明从车程序已启动；继续等待 AI_STATUS/AI_METRIC 就绪。")
+                    time.sleep(HANDSHAKE_RETRY_INTERVAL_S)
+                    continue
+
+                print("单一串口暂未收到 AI 握手，保持连接并继续等待从车回包。")
+                time.sleep(HANDSHAKE_RETRY_INTERVAL_S)
+            except Exception as exc:
+                if isinstance(exc, FirmwareMismatchError):
+                    if bridge is not None:
+                        try:
+                            bridge.close()
+                        except Exception:
+                            pass
+                    raise
+                last_error = exc
+                if bridge is not None:
+                    try:
+                        bridge.close()
+                    except Exception:
+                        pass
+                    bridge = None
+                time.sleep(HANDSHAKE_RETRY_INTERVAL_S)
+
+        if bridge is not None:
+            try:
+                bridge.close()
+            except Exception:
+                pass
+        raise RuntimeError("等待 CarB 串口握手超时，最后错误：{}".format(last_error))
+
     while time.monotonic() < deadline:
         raise_if_cancel_requested()
         for port in ports:
@@ -546,30 +682,13 @@ def open_bridge(serial_module, list_ports_module, serial_settings: SerialSetting
                 print("尝试连接 {} ...".format(port))
                 bridge = SerialBridge(serial_module, port, settings)
                 bridge.drain_input()
-                bridge.send_line("AI_STATUS")
-                lines = bridge.read_lines_for(PORT_PROBE_SECONDS)
-                has_ai_status = any(
-                    line.startswith("OK AI_STATUS")
-                    or ("paused=" in line and "manual_remaining_ms=" in line)
-                    for line in lines
-                )
-                has_old_tuning_ready = any("TUNE READY" in line for line in lines)
-                has_unsupported = any(line.startswith("ERR unsupported") for line in lines)
-                has_metric = any(line.startswith(AI_METRIC_PREFIX) for line in lines)
-
-                if has_ai_status or has_metric:
+                has_ai_handshake, has_protocol_banner = probe_bridge_handshake(bridge)
+                if has_ai_handshake:
                     print("已连接 CarB：{}".format(port))
                     return bridge
 
-                if has_old_tuning_ready or has_unsupported:
-                    if REQUIRE_AI_FIRMWARE:
-                        raise FirmwareMismatchError(
-                            "已连接到 CarB 串口 {}，但板子运行的是旧版程序：不支持 AI_STATUS/AI_PERTURB。"
-                            "请把当前电脑上的 CarB/control/FollowLeaderYawColorTrace.py 重新下载到从车，"
-                            "重新上电后再运行本脚本。".format(port)
-                        )
-                    print("已连接 CarB：{}，但未检测到 AI 控制命令支持。".format(port))
-                    return bridge
+                if has_protocol_banner:
+                    print("串口 {} 已收到新版协议启动横幅，继续等待 AI_STATUS/AI_METRIC。".format(port))
 
                 if len(ports) == 1:
                     print("单一串口暂未收到 AI 握手，继续等待从车启动后的回包。")
@@ -606,6 +725,211 @@ def parse_float(text: str) -> float | None:
             return None
 
 
+def normalize_serial_text(text: str) -> str:
+    """压缩串口文本中的多余空白，便于在混入噪声时做关键字匹配。"""
+    return " ".join(str(text).strip().split())
+
+
+def wrap_protocol_command(text: str) -> str:
+    """把普通命令包装成“包头 + 协议前缀 + 负载 + 包尾”的完整串口帧。"""
+    payload = normalize_serial_text(text)
+    if not payload:
+        return ""
+    if payload.startswith(TUNING_PROTOCOL_PREFIX):
+        protocol_payload = payload
+    else:
+        protocol_payload = "{}{}".format(TUNING_PROTOCOL_PREFIX, payload)
+    return "{}{}{}".format(
+        TUNING_PROTOCOL_FRAME_HEAD,
+        protocol_payload,
+        TUNING_PROTOCOL_FRAME_TAIL,
+    )
+
+
+def is_known_protocol_payload(text: str) -> bool:
+    """判断一行文本是否像旧版未加前缀的调参协议负载。"""
+    normalized = normalize_serial_text(text)
+    if not normalized:
+        return False
+    if normalized.startswith(("OK ", "ERR ", "AI_METRIC ", "TUNE READY", "CMD:")):
+        return True
+    if re.match(r"^[A-Z0-9_]+=[-+0-9.eE]+$", normalized):
+        return True
+    return False
+
+
+def extract_protocol_payload(text: str, allow_legacy: bool | None = None) -> str:
+    """从一段串口文本中提取协议负载；优先识别完整包头包尾帧。"""
+    if allow_legacy is None:
+        allow_legacy = TUNING_PROTOCOL_ACCEPT_LEGACY
+
+    raw_text = str(text)
+    if not raw_text:
+        return ""
+
+    frame_head = TUNING_PROTOCOL_FRAME_HEAD
+    frame_tail = TUNING_PROTOCOL_FRAME_TAIL
+    frame_start = raw_text.find(frame_head)
+    if frame_start >= 0:
+        frame_end = raw_text.find(frame_tail, frame_start + len(frame_head))
+        if frame_end >= 0:
+            raw_text = raw_text[frame_start + len(frame_head):frame_end]
+
+    normalized = normalize_serial_text(raw_text)
+    if not normalized:
+        return ""
+
+    index = normalized.find(TUNING_PROTOCOL_PREFIX)
+    if index >= 0:
+        payload = normalized[index + len(TUNING_PROTOCOL_PREFIX):].strip()
+        return normalize_serial_text(payload)
+
+    if allow_legacy and is_known_protocol_payload(normalized):
+        return normalized
+    return ""
+
+
+def extract_protocol_frames_from_buffer(buffer_text: str, allow_legacy: bool | None = None) -> tuple[list[str], str]:
+    """从串口缓冲区里连续提取所有完整协议帧，并返回剩余未闭合文本。"""
+    if allow_legacy is None:
+        allow_legacy = TUNING_PROTOCOL_ACCEPT_LEGACY
+
+    frames: list[str] = []
+    work_text = str(buffer_text or "")
+    frame_head = TUNING_PROTOCOL_FRAME_HEAD
+    frame_tail = TUNING_PROTOCOL_FRAME_TAIL
+
+    while True:
+        start = work_text.find(frame_head)
+        if start < 0:
+            break
+
+        end = work_text.find(frame_tail, start + len(frame_head))
+        if end < 0:
+            if start > 0:
+                work_text = work_text[start:]
+            break
+
+        frame_text = work_text[start:end + len(frame_tail)]
+        payload = extract_protocol_payload(frame_text, allow_legacy=allow_legacy)
+        if payload:
+            frames.append(payload)
+        work_text = work_text[end + len(frame_tail):]
+
+    if frame_head not in work_text and len(work_text) > SERIAL_RX_FRAME_BUFFER_LIMIT:
+        work_text = work_text[-len(frame_head):]
+    elif len(work_text) > SERIAL_RX_FRAME_BUFFER_LIMIT:
+        work_text = work_text[-SERIAL_RX_FRAME_BUFFER_LIMIT:]
+
+    return frames, work_text
+
+
+def extract_error_reply(text: str) -> str:
+    """从协议负载里提取 ERR ... 片段；若没有则返回空串。"""
+    normalized = extract_protocol_payload(text, allow_legacy=True) or normalize_serial_text(text)
+    match = re.search(r"ERR\b.*", normalized, flags=re.IGNORECASE)
+    return match.group(0) if match else ""
+
+
+def extract_named_value_reply(text: str, name: str) -> str:
+    """从协议负载中提取 NAME=VALUE 片段，供 GET 参数命令使用。"""
+    normalized = extract_protocol_payload(text, allow_legacy=True) or normalize_serial_text(text)
+    match = re.search(
+        r"(?<![A-Z0-9_]){}\s*=\s*([-+0-9.eE]+)".format(re.escape(name)),
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return "{}={}".format(name, match.group(1))
+
+
+def extract_ok_named_value_reply(text: str, name: str) -> str:
+    """从协议负载中提取 OK NAME=VALUE 片段，供 SET 参数命令使用。"""
+    normalized = extract_protocol_payload(text, allow_legacy=True) or normalize_serial_text(text)
+    match = re.search(
+        r"OK\s+{}\s*=\s*([-+0-9.eE]+)".format(re.escape(name)),
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return "OK {}={}".format(name, match.group(1))
+
+
+def extract_ok_command_reply(text: str, command_name: str) -> str:
+    """从协议负载中提取 OK COMMAND ... 片段，供 AI_STOP/AI_START 等控制命令使用。"""
+    normalized = extract_protocol_payload(text, allow_legacy=True) or normalize_serial_text(text)
+    match = re.search(
+        r"OK\s+{}\b.*".format(re.escape(command_name)),
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    return match.group(0) if match else ""
+
+
+def extract_ai_status_reply(text: str) -> str:
+    """兼容 AI_STATUS 的两种格式：完整 OK AI_STATUS，或仅剩状态字段的半行。"""
+    ok_reply = extract_ok_command_reply(text, "AI_STATUS")
+    if ok_reply:
+        return ok_reply
+
+    normalized = extract_protocol_payload(text, allow_legacy=True) or normalize_serial_text(text)
+    if "paused=" in normalized and "manual_remaining_ms=" in normalized:
+        start = normalized.find("paused=")
+        return "OK AI_STATUS " + normalized[start:]
+    return ""
+
+
+def extract_metric_fragment(text: str) -> str:
+    """从协议负载中尽量截出 AI_METRIC 起始片段。"""
+    normalized = extract_protocol_payload(text, allow_legacy=True) or normalize_serial_text(text)
+    index = normalized.find(AI_METRIC_PREFIX)
+    if index < 0:
+        return ""
+    return normalize_serial_text(normalized[index:])
+
+
+def sanitize_reply_for_command(
+    reply: str,
+    _command_upper: str,
+    get_name: str,
+    set_name: str,
+    simple_command: str,
+) -> str:
+    """把带噪声的原始串口行清洗成和当前命令真正相关的协议回包。"""
+    protocol_reply = extract_protocol_payload(reply, allow_legacy=True)
+    if not protocol_reply:
+        return ""
+
+    if get_name:
+        return extract_named_value_reply(protocol_reply, get_name)
+
+    if set_name:
+        ok_value_reply = extract_ok_named_value_reply(protocol_reply, set_name)
+        if ok_value_reply:
+            return ok_value_reply
+
+        # 若收到其他参数的 OK，说明是延迟回包，继续等待当前参数自己的确认。
+        other_ok = re.search(
+            r"OK\s+[A-Z0-9_]+\s*=",
+            protocol_reply,
+            flags=re.IGNORECASE,
+        )
+        if other_ok:
+            return ""
+
+    if simple_command == "AI_STATUS":
+        return extract_ai_status_reply(protocol_reply)
+
+    if simple_command.startswith("AI_"):
+        return extract_ok_command_reply(protocol_reply, simple_command)
+
+    if protocol_reply.startswith("OK"):
+        return protocol_reply
+    return ""
+
+
 def metric_float(fields: dict[str, str], name: str, default: float | None = 0.0) -> float | None:
     """从 AI_METRIC 字段里读取浮点数，遇到半行/粘包时尽量取数字前缀。"""
     value = parse_float(fields.get(name, ""))
@@ -615,7 +939,8 @@ def metric_float(fields: dict[str, str], name: str, default: float | None = 0.0)
 
 
 def parse_metric_line(line: str, timestamp_s: float) -> MetricSample | None:
-    if not line.startswith(AI_METRIC_PREFIX):
+    line = extract_metric_fragment(line)
+    if not line:
         return None
 
     fields = {}
@@ -699,11 +1024,17 @@ def require_ai_firmware(bridge: SerialBridge) -> None:
     if not REQUIRE_AI_FIRMWARE:
         return
 
-    reply = bridge.command("AI_STATUS", timeout_s=2.0)
-    if reply.startswith("OK AI_STATUS") or ("paused=" in reply and "manual_remaining_ms=" in reply):
+    reply = command_with_retry(
+        bridge,
+        "AI_STATUS",
+        "AI_STATUS",
+        timeout_s=2.0,
+        attempts=AI_STATUS_RETRY_ATTEMPTS,
+    )
+    if extract_ai_status_reply(reply):
         return
 
-    if reply.startswith("ERR unsupported"):
+    if extract_error_reply(reply).lower().startswith("err unsupported"):
         raise FirmwareMismatchError(
             "CarB 当前程序不支持 AI_STATUS/AI_PERTURB，说明从车还在运行旧版代码。"
             "请重新下载 CarB 文件夹中的新版代码到从车，重新上电后再运行脚本。"
@@ -764,7 +1095,7 @@ def command_with_retry(
         if reply.startswith("ERR"):
             return reply
         print("{} 第 {} 次未收到有效 OK，回包={!r}，准备重试。".format(command_name, attempt, reply))
-        time.sleep(0.15)
+        time.sleep(COMMAND_RETRY_SLEEP_S)
     return last_reply
 
 

@@ -1,0 +1,10 @@
+{
+  "session_name": "gui-2026-07-16-09-44-05",
+  "updated_at": "2026-07-16 09:45:09",
+  "status": "cancelled",
+  "error_message": "用户请求终止自动调参。",
+  "trial_count": 0,
+  "best_parameters": null,
+  "best_score": null,
+  "best_detail": {}
+}

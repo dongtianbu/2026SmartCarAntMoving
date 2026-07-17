@@ -9,3 +9,13 @@ python AIPID\aipid_upper_computer.py
 
 打包上位机 exe：
 AIPID\build_upper_computer.bat
+
+新版串口协议说明：
+1. 上位机发给从车的调参命令会自动加前缀 AIPID|
+2. 从车回给上位机的调参回包、AI_STATUS、AI_METRIC 也会统一带此前缀
+3. 上位机手动串口窗口默认只显示协议内内容，不显示协议外串口噪声
+
+打包输出目录：
+1. spec 文件位于 AIPID\AIPID_UpperComputer.spec
+2. build 目录位于 AIPID\build
+3. exe 位于 AIPID\dist\AIPID_UpperComputer.exe
